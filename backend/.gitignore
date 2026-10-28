@@ -1,0 +1,5 @@
+.venv/
+__pycache__/
+*.db
+archivos_subidos/
+.clave_secreta
