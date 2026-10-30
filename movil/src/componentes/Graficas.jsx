@@ -1,97 +1,26 @@
 // Gráficas de la pestaña Estadísticas, dibujadas con componentes de React Native.
+// Cada dato usa la forma que le toca: el total es un número grande, los indicadores son una lista,
+// lo que no tiene orden (categorías, colores) son barras y lo que sí lo tiene (abrigo) son columnas.
+// Las barras son de un solo color y la mayor va resaltada: la longitud ya dice el valor, el color solo destaca.
 import { useEffect, useState } from 'react';
 import { Animated, Pressable, Text, View } from 'react-native';
 
-import { Aparecer, useReducirMovimiento } from '../movimiento';
-import { crearEstilos, duracion, espacio, fuentes, presionado, radio, useTema } from '../tema';
+import { IconoAbrir, IconoCerrar } from '../iconos';
+import { useReducirMovimiento } from '../movimiento';
+import { crearEstilos, duracion, espacio, fuentes, presionado, radio, tactil, useTema } from '../tema';
+
+const ALTO_COLUMNAS = 96;
 
 const porcentaje = (valor, total) => Math.round((100 * valor) / (total || 1));
 
-// ---------- Resumen en cuadrícula Bento ----------
+// "12 de 36 prendas, 33 %": lo que se lee al tocar una barra o una columna.
+const detalleDe = (dato, total, unidad) => `${dato.valor} de ${total} ${unidad}, ${porcentaje(dato.valor, total)} %`;
 
-// Celdas de distinto tamaño (estilo Apple): el total grande arriba, el color más usado alto a la
-// izquierda y dos indicadores chicos a la derecha. Entran en cascada.
-// color: { etiqueta, hex } del color más usado (o null).
-export function ResumenBento({ total, color, impermeables, guardados }) {
-  const { colores, texto } = useTema();
-  const estilos = useEstilos();
-
-  return (
-    <View style={estilos.bento}>
-      <Aparecer indice={0}>
-        <View style={estilos.heroe} accessible accessibilityLabel={`${total} prendas en tu armario`}>
-          <Text style={[texto.antetitulo, { color: colores.sobrePrimario, opacity: 0.85 }]}>Tu armario</Text>
-          <Text style={estilos.numeroHeroe}>{total}</Text>
-          <Text style={[texto.cuerpoFuerte, { color: colores.sobrePrimario }]}>
-            {total === 1 ? 'prenda' : 'prendas'}
-          </Text>
-        </View>
-      </Aparecer>
-
-      <View style={estilos.filaBento}>
-        <Aparecer indice={1} estilo={{ flex: 1.15 }}>
-          <View
-            style={[estilos.celda, { flex: 1, justifyContent: 'space-between' }]}
-            accessible
-            accessibilityLabel={`Color más usado: ${color?.etiqueta ?? 'ninguno'}`}>
-            <View style={[estilos.muestraGrande, { backgroundColor: color?.hex ?? colores.superficieSuave }]} />
-            <View>
-              <Text style={texto.subtitulo}>{color?.etiqueta ?? 'Ninguno'}</Text>
-              <Text style={texto.nota}>color más usado</Text>
-            </View>
-          </View>
-        </Aparecer>
-
-        <View style={estilos.columnaBento}>
-          {[
-            { valor: impermeables, etiqueta: 'impermeables' },
-            { valor: guardados, etiqueta: 'atuendos guardados' },
-          ].map((celda, i) => (
-            <Aparecer key={celda.etiqueta} indice={i + 2}>
-              <View style={estilos.celda} accessible accessibilityLabel={`${celda.valor} ${celda.etiqueta}`}>
-                <Text style={estilos.numero}>{celda.valor}</Text>
-                <Text style={texto.nota}>{celda.etiqueta}</Text>
-              </View>
-            </Aparecer>
-          ))}
-        </View>
-      </View>
-    </View>
-  );
-}
-
-// ---------- Anotación del hallazgo ----------
-
-export function Hallazgo({ children }) {
-  const { colores, texto } = useTema();
-  const estilos = useEstilos();
-  return (
-    <View style={estilos.hallazgo}>
-      <Text style={[texto.antetitulo, { color: colores.primario, marginBottom: espacio.xs }]}>Lo más importante</Text>
-      <Text style={estilos.textoHallazgo}>{children}</Text>
-    </View>
-  );
-}
-
-// ---------- Gráfica de barras horizontales ----------
-
-// datos: [{ etiqueta, valor, color? }]. color: pinta la barra (p. ej. el color de la prenda).
-// pregunta: lo que responde la gráfica. repeticion: cambia para volver a animar.
-export function GraficaBarras({ titulo, pregunta, datos, unidad, repeticion }) {
-  const { colores, texto } = useTema();
-  const estilos = useEstilos();
+// Va de 0 a 1 cuando llegan los datos: las barras crecen desde su base. Se omite con "Reducir movimiento".
+function useCrecer(repeticion) {
   const reducir = useReducirMovimiento();
-  const [seleccionada, establecerSeleccionada] = useState(null);
-  const [avance] = useState(() => new Animated.Value(0)); // va de 0 a 1 durante la animación
+  const [avance] = useState(() => new Animated.Value(0));
 
-  const total = datos.reduce((suma, d) => suma + d.valor, 0);
-  const maximo = Math.max(...datos.map((d) => d.valor), 1);
-  // Solo se destaca la mayor si es única: con empate ninguna barra se marca como "Mayor".
-  const hayUnaMayor = datos.filter((d) => d.valor === maximo).length === 1;
-  const usaColores = datos.some((d) => d.color);
-
-  // Animación de entrada: las barras crecen desde la izquierda con scaleX (transform, no el ancho, así
-  // corre en el hilo nativo). Se omite si el usuario redujo el movimiento.
   useEffect(() => {
     avance.setValue(reducir ? 1 : 0);
     if (reducir) return undefined;
@@ -100,135 +29,252 @@ export function GraficaBarras({ titulo, pregunta, datos, unidad, repeticion }) {
     return () => animacion.stop();
   }, [avance, repeticion, reducir]);
 
+  return avance;
+}
+
+// Solo se resalta la mayor si es única: con empate ninguna destaca.
+function resumirDatos(datos) {
+  const maximo = Math.max(...datos.map((d) => d.valor), 1);
+  return {
+    maximo,
+    total: datos.reduce((suma, d) => suma + d.valor, 0),
+    hayUnaMayor: datos.filter((d) => d.valor === maximo).length === 1,
+  };
+}
+
+// ---------- Total y hallazgo ----------
+
+// Lo primero que se ve: el único bloque de color de la pantalla.
+export function Resumen({ total, hallazgo }) {
+  const estilos = useEstilos();
+  return (
+    <View style={estilos.resumen}>
+      <View style={estilos.filaTotal} accessible accessibilityLabel={`${total} prendas en tu armario`}>
+        <Text style={estilos.numeroTotal}>{total}</Text>
+        <Text style={estilos.textoTotal}>{total === 1 ? 'prenda en tu armario' : 'prendas en tu armario'}</Text>
+      </View>
+      <Text style={estilos.hallazgo}>{hallazgo}</Text>
+    </View>
+  );
+}
+
+// ---------- Indicadores ----------
+
+// Lista de datos sueltos: cuadro con un ícono o un color, título, explicación y el valor a la derecha.
+// filas: [{ icono?, hex?, titulo, detalle, valor }]
+export function Indicadores({ filas }) {
+  const { colores, texto } = useTema();
+  const estilos = useEstilos();
+  return (
+    <View style={estilos.bloque}>
+      {filas.map((fila, i) => (
+        <View
+          key={fila.titulo}
+          style={[estilos.indicador, i < filas.length - 1 && estilos.separador]}
+          accessible
+          accessibilityLabel={`${fila.detalle}: ${fila.titulo}, ${fila.valor}`}>
+          <View style={[estilos.cuadro, fila.hex && { backgroundColor: fila.hex, borderWidth: 1, borderColor: colores.bordeControl }]}>
+            {fila.icono && <fila.icono color={colores.primario} size={20} />}
+          </View>
+          <View style={estilos.datosIndicador}>
+            <Text style={estilos.tituloIndicador} numberOfLines={1}>
+              {fila.titulo}
+            </Text>
+            <Text style={texto.nota} numberOfLines={1}>
+              {fila.detalle}
+            </Text>
+          </View>
+          <Text style={estilos.valorIndicador}>{fila.valor}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// ---------- Sección ----------
+
+// Título a la izquierda y, si se pasa, un dato a la derecha; debajo, la gráfica.
+export function Seccion({ titulo, nota, children }) {
+  const { texto } = useTema();
+  const estilos = useEstilos();
+  return (
+    <View style={estilos.seccion}>
+      <View style={estilos.cabeceraSeccion}>
+        <Text style={[texto.subtitulo, { flex: 1 }]} accessibilityRole="header">
+          {titulo}
+        </Text>
+        {nota && <Text style={texto.nota}>{nota}</Text>}
+      </View>
+      {children}
+    </View>
+  );
+}
+
+// ---------- Barras horizontales ----------
+
+// datos: [{ etiqueta, valor, hex? }], de mayor a menor. hex: círculo con el color de la prenda junto al nombre.
+// La barra más larga es la mayor; tocar una fila muestra su detalle. Con limite, el resto se abre con un enlace.
+export function GraficaBarras({ datos, unidad, repeticion, limite = datos.length }) {
+  const { colores, texto } = useTema();
+  const estilos = useEstilos();
+  const avance = useCrecer(repeticion);
+  const [seleccionada, establecerSeleccionada] = useState(null);
+  const [abierta, establecerAbierta] = useState(false);
+  const { maximo, total, hayUnaMayor } = resumirDatos(datos);
+  const visibles = abierta ? datos : datos.slice(0, limite);
+
+  return (
+    <View style={estilos.bloque}>
+      {visibles.map((dato) => {
+        const esMayor = dato.valor === maximo && hayUnaMayor;
+        const activa = dato.etiqueta === seleccionada;
+        return (
+          <Pressable
+            key={dato.etiqueta}
+            onPress={() => establecerSeleccionada(activa ? null : dato.etiqueta)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: activa }}
+            accessibilityLabel={`${dato.etiqueta}: ${detalleDe(dato, total, unidad)}${esMayor ? ', el mayor' : ''}`}
+            style={({ pressed }) => [estilos.filaBarra, pressed && presionado]}>
+            <View style={estilos.encabezadoBarra}>
+              {dato.hex && <View style={[estilos.muestra, { backgroundColor: dato.hex }]} />}
+              <Text style={[estilos.etiqueta, esMayor && estilos.etiquetaMayor]} numberOfLines={1}>
+                {dato.etiqueta}
+              </Text>
+              <Text style={estilos.valor}>{dato.valor}</Text>
+            </View>
+            <Animated.View
+              style={[
+                estilos.barra,
+                {
+                  width: `${(100 * dato.valor) / maximo}%`,
+                  backgroundColor: esMayor ? colores.primario : colores.secundario,
+                  transform: [{ scaleX: avance }],
+                },
+              ]}
+            />
+            {activa && (
+              <Text style={[texto.nota, { marginTop: espacio.xs }]} accessibilityLiveRegion="polite">
+                {detalleDe(dato, total, unidad)}
+              </Text>
+            )}
+          </Pressable>
+        );
+      })}
+
+      {datos.length > limite && (
+        <Pressable
+          onPress={() => establecerAbierta(!abierta)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: abierta }}
+          style={({ pressed }) => [estilos.enlace, pressed && presionado]}>
+          <Text style={estilos.textoEnlace}>{abierta ? 'Ver menos' : `Ver los ${datos.length}`}</Text>
+          {abierta ? (
+            <IconoCerrar color={colores.primario} size={14} weight="bold" />
+          ) : (
+            <IconoAbrir color={colores.primario} size={14} weight="bold" />
+          )}
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+// ---------- Columnas ----------
+
+// Para datos con orden: se ve de un vistazo hacia qué lado se carga la distribución.
+// datos: [{ corta, etiqueta, valor }]. inicio y fin explican los dos extremos del eje.
+export function GraficaColumnas({ datos, unidad, repeticion, inicio, fin }) {
+  const { colores, texto } = useTema();
+  const estilos = useEstilos();
+  const avance = useCrecer(repeticion);
+  const [seleccionada, establecerSeleccionada] = useState(null);
+  const { maximo, total, hayUnaMayor } = resumirDatos(datos);
   const elegida = datos.find((d) => d.etiqueta === seleccionada);
 
   return (
-    <View style={estilos.tarjeta}>
-      <Text style={texto.subtitulo}>{titulo}</Text>
-      {pregunta && <Text style={[texto.detalle, { marginTop: 2 }]}>{pregunta}</Text>}
-
-      <View style={{ marginTop: espacio.m, gap: espacio.s }}>
+    <View style={estilos.bloque}>
+      <View style={estilos.columnas}>
         {datos.map((dato) => {
-          const esMaximo = dato.valor === maximo && hayUnaMayor;
+          const esMayor = dato.valor === maximo && hayUnaMayor;
           const activa = dato.etiqueta === seleccionada;
-          const relleno = dato.color ?? (esMaximo ? colores.primario : colores.secundario);
-
           return (
             <Pressable
               key={dato.etiqueta}
               onPress={() => establecerSeleccionada(activa ? null : dato.etiqueta)}
               accessibilityRole="button"
               accessibilityState={{ selected: activa }}
-              accessibilityLabel={
-                `${dato.etiqueta}: ${dato.valor} ${unidad}, ${porcentaje(dato.valor, total)} por ciento` +
-                (esMaximo ? ', el mayor' : '')
-              }
-              style={({ pressed }) => [estilos.fila, activa && estilos.filaActiva, pressed && presionado]}>
-              {/* Encabezado de la barra: nombre a la izquierda, cantidad y porcentaje a la derecha */}
-              <View style={estilos.encabezadoFila}>
-                {dato.color && <View style={[estilos.muestra, { backgroundColor: dato.color }]} />}
-                <Text style={[estilos.etiqueta, esMaximo && estilos.etiquetaFuerte]} numberOfLines={1}>
-                  {dato.etiqueta}
-                </Text>
-                {esMaximo && <Text style={estilos.insignia}>Mayor</Text>}
-                <Text style={estilos.valor}>{dato.valor}</Text>
-                <Text style={estilos.porcentaje}>{porcentaje(dato.valor, total)} %</Text>
-              </View>
-
-              {/* La pista es el 100 % del armario; la barra rellena la parte que le toca */}
-              <View style={estilos.pista}>
-                <Animated.View
-                  style={[
-                    estilos.barra,
-                    { width: `${porcentaje(dato.valor, total)}%`, backgroundColor: relleno },
-                    dato.valor > 0 && { minWidth: 6 },
-                    dato.color && estilos.barraDeColor,
-                    { transform: [{ scaleX: avance }] },
-                  ]}
-                />
-              </View>
+              accessibilityLabel={`${dato.etiqueta}: ${detalleDe(dato, total, unidad)}${esMayor ? ', el mayor' : ''}`}
+              style={({ pressed }) => [estilos.columna, pressed && presionado]}>
+              <Text style={[estilos.valorColumna, activa && estilos.etiquetaMayor]}>{dato.valor}</Text>
+              <Animated.View
+                style={[
+                  estilos.barraColumna,
+                  {
+                    height: Math.max((ALTO_COLUMNAS * dato.valor) / maximo, 2),
+                    backgroundColor: esMayor ? colores.primario : colores.secundario,
+                    transform: [{ scaleY: avance }],
+                  },
+                ]}
+              />
+              <Text style={[texto.nota, activa && estilos.etiquetaMayor]}>{dato.corta}</Text>
             </Pressable>
           );
         })}
       </View>
 
-      {/* Detalle del dato que se tocó, o cómo leer la gráfica */}
-      <View style={estilos.pie} accessibilityLiveRegion="polite">
-        <Text style={[texto.detalle, elegida && { color: colores.texto }]}>
-          {elegida
-            ? `${elegida.etiqueta}: ${elegida.valor} de ${total} ${unidad} (${porcentaje(elegida.valor, total)} %).` +
-              (elegida.valor === maximo ? (hayUnaMayor ? ' Es lo que más tienes.' : ' Empata en el primer lugar.') : '')
-            : usaColores
-              ? `Cada barra va del color de la prenda. La barra llena serían tus ${total} ${unidad}. Toca una para ver el detalle.`
-              : `${hayUnaMayor ? 'La barra marcada como «Mayor» es la más alta.' : 'Hay un empate en el primer lugar.'} La barra llena serían tus ${total} ${unidad}. Toca una para ver el detalle.`}
-        </Text>
+      <View style={estilos.ejeColumnas}>
+        <Text style={texto.nota}>{inicio}</Text>
+        <Text style={texto.nota}>{fin}</Text>
       </View>
+      {elegida && (
+        <Text style={[texto.detalle, { marginBottom: espacio.s + 4, color: colores.texto }]} accessibilityLiveRegion="polite">
+          {elegida.etiqueta}: {detalleDe(elegida, total, unidad)}
+        </Text>
+      )}
     </View>
   );
 }
 
-const useEstilos = crearEstilos(({ colores, texto, tarjeta }) => ({
-  bento: { gap: espacio.s + 4 },
-  heroe: { ...tarjeta, backgroundColor: colores.primario, borderWidth: 0, padding: espacio.l },
-  numeroHeroe: {
-    fontFamily: fuentes.negra,
-    fontSize: 72,
-    lineHeight: 76,
-    letterSpacing: -3,
-    color: colores.sobrePrimario,
-    marginTop: espacio.xs,
-  },
-  filaBento: { flexDirection: 'row', gap: espacio.s + 4 },
-  columnaBento: { flex: 1, gap: espacio.s + 4 },
-  celda: { ...tarjeta, padding: espacio.m, gap: espacio.xs },
-  numero: { fontFamily: fuentes.negra, fontSize: 36, lineHeight: 40, letterSpacing: -1, color: colores.texto },
-  muestraGrande: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: colores.bordeControl,
-    marginBottom: espacio.l,
-  },
+const useEstilos = crearEstilos(({ colores, texto }) => ({
+  resumen: { padding: espacio.m, borderRadius: radio.l, backgroundColor: colores.primarioSuave, gap: espacio.s },
+  filaTotal: { flexDirection: 'row', alignItems: 'flex-end', gap: espacio.s + 4 },
+  numeroTotal: { fontFamily: fuentes.display, fontSize: 88, lineHeight: 96, letterSpacing: -3, color: colores.primario },
+  textoTotal: { ...texto.cuerpo, flex: 1, paddingBottom: espacio.m },
+  hallazgo: { fontFamily: fuentes.displayItalica, fontSize: 20, lineHeight: 28, color: colores.texto },
 
-  hallazgo: { ...tarjeta, backgroundColor: colores.primarioSuave, borderWidth: 0, padding: espacio.m, marginVertical: espacio.l },
-  textoHallazgo: { ...texto.cuerpoFuerte, fontSize: 17, lineHeight: 25 },
+  // Bloque suave donde van las filas, igual que en el Armario.
+  bloque: { paddingHorizontal: espacio.m, paddingVertical: espacio.xs, borderRadius: radio.l, backgroundColor: colores.superficieSuave },
+  seccion: { gap: espacio.s + 4 },
+  cabeceraSeccion: { flexDirection: 'row', alignItems: 'baseline', gap: espacio.s },
 
-  tarjeta: { ...tarjeta, padding: espacio.m, marginBottom: espacio.m },
-  fila: { borderRadius: radio.m, padding: espacio.s, margin: -espacio.s, minHeight: 44 },
-  filaActiva: { backgroundColor: colores.superficieSuave },
-  encabezadoFila: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
-  muestra: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    marginRight: espacio.s,
-    borderWidth: 1,
-    borderColor: colores.bordeControl,
-  },
-  etiqueta: { ...texto.etiqueta, flexShrink: 1, fontFamily: fuentes.regular, fontSize: 15 },
-  etiquetaFuerte: { fontFamily: fuentes.negrita },
-  insignia: {
-    marginLeft: espacio.s,
-    fontFamily: fuentes.negrita,
-    fontSize: 12,
-    color: colores.primario,
+  indicador: { flexDirection: 'row', alignItems: 'center', gap: espacio.s + 4, paddingVertical: espacio.s + 4 },
+  separador: { borderBottomWidth: 1, borderBottomColor: colores.borde },
+  cuadro: {
+    width: 40,
+    height: 40,
+    borderRadius: radio.m,
     backgroundColor: colores.primarioSuave,
-    paddingHorizontal: espacio.s,
-    paddingVertical: 2,
-    borderRadius: radio.pastilla,
-    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  valor: { marginLeft: 'auto', paddingLeft: espacio.s, fontFamily: fuentes.negrita, fontSize: 15, color: colores.texto },
-  porcentaje: { ...texto.nota, width: 48, textAlign: 'right' },
-  pista: { height: 12, borderRadius: 6, backgroundColor: colores.superficieSuave, overflow: 'hidden' },
-  barra: { height: 12, borderRadius: 6, transformOrigin: 'left' },
-  barraDeColor: { borderWidth: 1, borderColor: colores.bordeControl },
-  pie: {
-    marginTop: espacio.m,
-    paddingTop: espacio.m,
-    borderTopWidth: 1,
-    borderTopColor: colores.superficieSuave,
-    minHeight: 44,
-  },
+  datosIndicador: { flex: 1, minWidth: 0 },
+  tituloIndicador: { fontFamily: fuentes.negrita, fontSize: 15, lineHeight: 20, color: colores.texto },
+  valorIndicador: { fontFamily: fuentes.display, fontSize: 28, lineHeight: 34, color: colores.texto },
+
+  filaBarra: { minHeight: tactil, justifyContent: 'center', paddingVertical: espacio.s },
+  encabezadoBarra: { flexDirection: 'row', alignItems: 'center', gap: espacio.s, marginBottom: 6 },
+  muestra: { width: 14, height: 14, borderRadius: 7, borderWidth: 1, borderColor: colores.bordeControl },
+  etiqueta: { ...texto.etiqueta, flex: 1, fontFamily: fuentes.regular, fontSize: 15 },
+  etiquetaMayor: { fontFamily: fuentes.negrita, color: colores.texto },
+  valor: { fontFamily: fuentes.negrita, fontSize: 15, color: colores.texto },
+  barra: { height: 8, borderRadius: 4, minWidth: 4, transformOrigin: 'left' },
+  enlace: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: tactil, alignSelf: 'flex-start' },
+  textoEnlace: { fontFamily: fuentes.media, fontSize: 14, color: colores.primario },
+
+  columnas: { flexDirection: 'row', alignItems: 'flex-end', gap: espacio.s, paddingTop: espacio.s + 4 },
+  columna: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', minHeight: tactil, gap: espacio.xs },
+  valorColumna: { fontFamily: fuentes.media, fontSize: 14, lineHeight: 20, color: colores.texto },
+  barraColumna: { alignSelf: 'stretch', borderTopLeftRadius: 4, borderTopRightRadius: 4, transformOrigin: 'bottom' },
+  ejeColumnas: { flexDirection: 'row', justifyContent: 'space-between', paddingTop: espacio.xs, paddingBottom: espacio.s },
 }));

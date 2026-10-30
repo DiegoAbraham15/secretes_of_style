@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS prendas (
     color_principal TEXT NOT NULL,
     nivel_abrigo INTEGER NOT NULL,
     impermeable INTEGER DEFAULT 0,
+    estampado TEXT DEFAULT 'liso',
+    estilo TEXT DEFAULT 'casual',
     estado TEXT DEFAULT 'disponible',
     fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP
 );
@@ -49,12 +51,41 @@ CREATE TABLE IF NOT EXISTS atuendo_elementos (
     rol TEXT NOT NULL,
     PRIMARY KEY (atuendo_id, prenda_id)
 );
+CREATE TABLE IF NOT EXISTS preferencias_usuario (
+    usuario_id INTEGER PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
+    paleta TEXT NOT NULL,
+    ropa TEXT NOT NULL,
+    estampados TEXT NOT NULL,
+    accesorios TEXT NOT NULL,
+    fecha_actualizacion TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS pesos_usuario (
+    usuario_id INTEGER PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
+    pesos TEXT NOT NULL,
+    fecha_actualizacion TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS votos_atuendo (
+    id INTEGER PRIMARY KEY,
+    usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    firma TEXT NOT NULL,
+    me_gusta INTEGER NOT NULL,
+    caracteristicas TEXT NOT NULL,
+    fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (usuario_id, firma)
+);
 CREATE TABLE IF NOT EXISTS climas (
     clave TEXT PRIMARY KEY,
     consultado REAL NOT NULL,
     reporte TEXT NOT NULL
 );
 """
+
+# Columnas que se agregaron después: las bases viejas las reciben al arrancar el servidor.
+COLUMNAS_NUEVAS = [
+    ("usuarios", "version_sesion", "INTEGER DEFAULT 0"),
+    ("prendas", "estampado", "TEXT DEFAULT 'liso'"),
+    ("prendas", "estilo", "TEXT DEFAULT 'casual'"),
+]
 
 
 def conectar() -> sqlite3.Connection:
@@ -67,11 +98,11 @@ def conectar() -> sqlite3.Connection:
 def crear_tablas():
     with closing(conectar()) as conexion:
         conexion.executescript(TABLAS)
-        # Bases creadas antes de que existiera version_sesion: se agrega la columna.
-        columnas = {fila["name"] for fila in conexion.execute("PRAGMA table_info(usuarios)")}
-        if "version_sesion" not in columnas:
-            conexion.execute("ALTER TABLE usuarios ADD COLUMN version_sesion INTEGER DEFAULT 0")
-            conexion.commit()
+        for tabla, columna, definicion in COLUMNAS_NUEVAS:
+            columnas = {fila["name"] for fila in conexion.execute(f"PRAGMA table_info({tabla})")}
+            if columna not in columnas:
+                conexion.execute(f"ALTER TABLE {tabla} ADD COLUMN {columna} {definicion}")
+        conexion.commit()
 
 
 def consultar(sql: str, parametros: tuple = ()) -> list[dict]:

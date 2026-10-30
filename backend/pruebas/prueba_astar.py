@@ -1,4 +1,4 @@
-"""Comprueba que A* devuelve los atuendos más baratos (contra fuerza bruta) y la API nueva.
+"""Comprueba que A* devuelve los atuendos más baratos (contra fuerza bruta), los otros algoritmos y la API.
 Ejecutar desde la carpeta backend: .venv\Scripts\python pruebas\prueba_astar.py"""
 import itertools
 import os
@@ -17,8 +17,9 @@ base_datos.RUTA_BD = temporal / "prueba.db"
 base_datos.CARPETA_ARCHIVOS = temporal / "archivos"
 
 from fastapi.testclient import TestClient  # noqa: E402
-from servidor import busqueda, principal  # noqa: E402
-from servidor.logica import razonar_clima  # noqa: E402
+from servidor import algoritmos, busqueda, principal  # noqa: E402
+from servidor.logica import ESTILOS
+from servidor.logica import hechos_de_ocasion, razonar_clima  # noqa: E402
 
 fallas = 0
 
@@ -38,9 +39,18 @@ def armario_al_azar(semilla, n=14):
     return [
         {"id": i, "categoria": r.choice(CATEGORIAS), "color_principal": r.choice(COLORES),
          "nivel_abrigo": r.randint(1, 5), "impermeable": r.random() < 0.3,
-         "estado": r.choice(["disponible"] * 5 + ["en_lavado"]), "subcategoria": None}
+         "estado": r.choice(["disponible"] * 5 + ["en_lavado"]), "subcategoria": None,
+         "estampado": r.choice(["liso"] * 3 + ["rayas", "floral"]), "estilo": r.choice(ESTILOS)}
         for i in range(1, n + 1)
     ]
+
+
+def hechos_al_azar(semilla):
+    """Un clima y una ocasión al azar, con las deducciones de la lógica."""
+    r = random.Random(semilla)
+    clima = r.choice([{"frio"}, {"calor"}, {"lluvia"}, {"frio", "lluvia"}, set()])
+    hechos, _ = razonar_clima(clima | hechos_de_ocasion(r.choice(["diario", "formal", "deporte"])))
+    return hechos
 
 
 def costo_optimo(conjunto, problema):
@@ -71,14 +81,14 @@ def fuerza_bruta(problema):
     return sorted(costos)
 
 
-# --- 1. A* da los más baratos, en 300 armarios y climas al azar ---
+# --- 1. A* da los más baratos, en 300 armarios, climas y ocasiones al azar ---
 errores, casos, con_resultado = [], 0, 0
 for semilla in range(300):
     armario = armario_al_azar(semilla)
     base = next((p for p in armario if p["categoria"] != "accesorio"), None)
     if not base:
         continue
-    hechos, _ = razonar_clima(random.Random(semilla).choice([{"frio"}, {"calor"}, {"lluvia"}, {"frio", "lluvia"}, set()]))
+    hechos = hechos_al_azar(semilla)
     problema = busqueda.preparar_problema(base, armario, hechos)
     esperado = fuerza_bruta(problema)[:3]
     obtenido = [n["g"] for n in busqueda.mejores_atuendos(problema, 3)]
@@ -87,6 +97,41 @@ for semilla in range(300):
     if esperado != obtenido:
         errores.append((semilla, esperado, obtenido))
 ok(not errores, f"A* = fuerza bruta en {casos} armarios ({con_resultado} con atuendos). Diferencias: {errores[:3]}")
+
+# --- 1b. Los otros algoritmos con los mismos armarios ---
+errores = {clave: [] for clave in algoritmos.ALGORITMOS}
+for semilla in range(300):
+    armario = armario_al_azar(semilla)
+    base = next((p for p in armario if p["categoria"] != "accesorio"), None)
+    if not base:
+        continue
+    hechos = hechos_al_azar(semilla)
+    problema = busqueda.preparar_problema(base, armario, hechos)
+    todos = fuerza_bruta(problema)
+    for clave, buscar in algoritmos.ALGORITMOS.items():
+        nodos = buscar(problema, 3)
+        completos = all(busqueda.faltan(n["atuendo"], problema) == 0 for n in nodos)
+        distintos = len({busqueda.estado(n["atuendo"]) for n in nodos}) == len(nodos)
+        # Ningún atuendo cuesta menos que el óptimo ni que la estimación de A* (h admisible).
+        baratos = not nodos or (min(n["g"] for n in nodos) >= todos[0] >= algoritmos.costo_estimado(problema))
+        if not (completos and distintos and baratos) or (clave != "heuristica_simple" and len(nodos) != min(3, len(todos))):
+            errores[clave].append(semilla)
+        if clave == "ucs" and [n["g"] for n in nodos] != todos[:3]:
+            errores[clave].append(semilla)
+    if len(algoritmos.heuristica_mejorada(problema)) != len(todos):
+        errores["heuristica_mejorada"].append(semilla)
+for clave, semillas in errores.items():
+    ok(not semillas, f"{clave}: atuendos completos, sin repetir y nunca más baratos que el óptimo {semillas[:5]}")
+
+# Límite de profundidad: con la blusa como base hacen falta 2 prendas (parte inferior y calzado).
+armario = [
+    {"id": 1, "categoria": "parte_superior", "color_principal": "blanco", "nivel_abrigo": 2, "impermeable": False, "estado": "disponible", "subcategoria": None},
+    {"id": 2, "categoria": "parte_inferior", "color_principal": "negro", "nivel_abrigo": 2, "impermeable": False, "estado": "disponible", "subcategoria": None},
+    {"id": 3, "categoria": "calzado", "color_principal": "negro", "nivel_abrigo": 2, "impermeable": False, "estado": "disponible", "subcategoria": None},
+]
+problema = busqueda.preparar_problema(armario[0], armario, set())
+ok(algoritmos.heuristica_mejorada(problema, limite=1) == [], "heurística mejorada con límite 1: sin atuendos")
+ok(len(algoritmos.heuristica_mejorada(problema, limite=2)) == 1, "heurística mejorada con límite 2: un atuendo")
 
 # --- 2. Orden, accesorio y prendas no disponibles ---
 armario = [
@@ -125,6 +170,12 @@ principal.obtener_clima = lambda lat, lon: {"temperatura_c": 20, "sensacion_term
 r = cliente.post("/api/recomendaciones", headers=h, json={"prenda_base_id": 1, "latitud": 19.4, "longitud": -99.1})
 ok(r.status_code == 200 and len(r.json()["sugerencias"]) == 2 and "busqueda" not in r.json(), f"/api/recomendaciones ({r.status_code})")
 ok(cliente.post("/api/busquedas", headers=h, json={}).status_code == 404, "/api/busquedas ya no existe")
+for clave in algoritmos.ALGORITMOS:
+    otro = cliente.post("/api/recomendaciones", headers=h,
+                        json={"prenda_base_id": 1, "latitud": 19.4, "longitud": -99.1, "algoritmo": clave})
+    ok(otro.status_code == 200 and otro.json()["sugerencias"], f"/api/recomendaciones con {clave}")
+otro = cliente.post("/api/recomendaciones", headers=h, json={"prenda_base_id": 1, "latitud": 19.4, "longitud": -99.1, "algoritmo": "x"})
+ok(otro.status_code == 422, "algoritmo desconocido: 422")
 
 # Guardar con la base al final del orden de ids: debe volver con la base primero.
 sug = r.json()["sugerencias"][0]

@@ -34,6 +34,8 @@ export function useSesion() {
 export function ProveedorSesion({ children }) {
   const [token, establecerToken] = useState(null);
   const [cargando, establecerCargando] = useState(true);
+  // { token, correo, cuestionarioListo } de la última sesión consultada
+  const [cuenta, establecerCuenta] = useState(null);
 
   // Al abrir la app, recupera la sesión guardada.
   useEffect(() => {
@@ -43,6 +45,18 @@ export function ProveedorSesion({ children }) {
       .catch(() => null)
       .finally(() => establecerCargando(false));
   }, []);
+
+  // El correo para el avatar del encabezado y si falta el cuestionario de estilo.
+  useEffect(() => {
+    if (!token) return;
+    api
+      .obtenerUsuario()
+      .then((usuario) =>
+        establecerCuenta({ token, correo: usuario.correo, cuestionarioListo: usuario.cuestionario_listo }),
+      )
+      // Sin conexión no se detiene a la persona con el cuestionario.
+      .catch(() => establecerCuenta({ token, correo: null, cuestionarioListo: true }));
+  }, [token]);
 
   function guardarToken(nuevoToken) {
     establecerToken(nuevoToken);
@@ -54,6 +68,9 @@ export function ProveedorSesion({ children }) {
   const valor = {
     token,
     cargando,
+    correo: cuenta?.token === token ? cuenta.correo : null, // al cambiar de cuenta no se ve el correo anterior
+    cuestionarioListo: cuenta?.token === token ? cuenta.cuestionarioListo : null, // null: aún no se sabe
+    marcarCuestionarioListo: () => establecerCuenta((actual) => ({ ...actual, cuestionarioListo: true })),
     iniciarSesion: async (correo, contraseña) =>
       guardarToken((await api.iniciarSesion(correo, contraseña)).token_acceso),
     registrarse: async (correo, contraseña) =>

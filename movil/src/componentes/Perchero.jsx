@@ -1,46 +1,31 @@
-// Un atuendo mostrado como maniquí: las prendas apiladas de arriba abajo como se usan
-// (accesorio, abrigo, parte superior, parte inferior, calzado), cada una con su nombre
-// y por qué combina con la prenda base. Abajo, las ventajas para el clima.
-// titulo: reemplaza "Atuendo N" (p. ej. la fecha en Guardados). etiqueta: aviso arriba (p. ej. "La mejor opción").
-// destacado: resalta la tarjeta. alGuardar / alEliminar: botón al pie (no aparece si no se pasa).
+// Un atuendo sugerido como tarjeta: arriba una franja con las fotos de sus prendas, de arriba abajo como se
+// usan (accesorio, abrigo, parte superior, parte inferior, calzado), y debajo "Look N", el nombre de cada
+// prenda con por qué combina con la base, las ventajas para el clima y las acciones.
+// etiqueta: aviso sobre las fotos (p. ej. "La mejor opción"). destacado: resalta la tarjeta.
+// alExplicar: botón "¿Por qué?"; explicacion ({ texto } o { error }) es lo que redactó la IA.
+// conCorazon y alCorazon: el corazón con el que la persona le enseña sus gustos a la app; errorVoto si no se guardó.
 import { Image } from 'expo-image';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { urlImagen } from '../api';
-import { ETIQUETA_CATEGORIA, ETIQUETA_COLOR, HEX_COLOR, nombreDePrenda } from '../catalogos';
-import { IconoEliminar, IconoGuardados, IconoPalomita, IconoVentaja } from '../iconos';
-import { crearEstilos, espacio, fuentes, radio, useTema } from '../tema';
+import { ETIQUETA_COLOR, HEX_COLOR, nombreDePrenda, ORDEN_CUERPO } from '../catalogos';
+import { IconoCorazon, IconoGuardados, IconoIA, IconoPalomita, IconoVentaja } from '../iconos';
+import { crearEstilos, espacio, fuentes, presionado, radio, tactil, tamañoIcono, useTema } from '../tema';
 import { Boton } from './Boton';
 
-const ORDEN_CUERPO = ['accesorio', 'abrigo', 'parte_superior', 'parte_inferior', 'calzado'];
-const ANCHO_FOTO = 80;
+const nombreConColor = (prenda) => `${nombreDePrenda(prenda)} ${ETIQUETA_COLOR[prenda.color_principal].toLowerCase()}`;
 
 function Prenda({ prenda, motivo, esBase }) {
   const { colores, texto } = useTema();
   const estilos = useEstilos();
   return (
     <View style={estilos.fila}>
-      <Image
-        source={{ uri: urlImagen(prenda.url_imagen) }}
-        style={estilos.foto}
-        contentFit="cover"
-        cachePolicy="memory-disk"
-        transition={200}
-      />
-
+      <View style={[estilos.muestra, { backgroundColor: HEX_COLOR[prenda.color_principal] }]} />
       <View style={estilos.datos}>
-        <Text style={[texto.antetitulo, esBase && { color: colores.primario }]}>
-          {ETIQUETA_CATEGORIA[prenda.categoria]}
-          {esBase && ' · tu prenda base'}
-        </Text>
-        <View style={estilos.filaNombre}>
-          <View style={[estilos.muestra, { backgroundColor: HEX_COLOR[prenda.color_principal] }]} />
-          <Text style={estilos.nombre} numberOfLines={2}>
-            {nombreDePrenda(prenda)} {ETIQUETA_COLOR[prenda.color_principal].toLowerCase()}
-          </Text>
-        </View>
+        <Text style={estilos.nombre}>{nombreConColor(prenda)}</Text>
         {motivo && <Text style={texto.nota}>{motivo[0].toUpperCase() + motivo.slice(1)}</Text>}
       </View>
+      {esBase && <Text style={[texto.nota, { color: colores.primario }]}>Tu base</Text>}
     </View>
   );
 }
@@ -48,14 +33,17 @@ function Prenda({ prenda, motivo, esBase }) {
 export function Perchero({
   sugerencia,
   numero,
-  titulo,
   etiqueta,
   destacado = false,
   guardada,
   guardando,
   alGuardar,
-  alEliminar,
-  eliminando,
+  alExplicar,
+  explicando,
+  explicacion,
+  conCorazon,
+  alCorazon,
+  errorVoto,
 }) {
   const { colores, texto } = useTema();
   const estilos = useEstilos();
@@ -69,106 +57,155 @@ export function Perchero({
 
   return (
     <View style={[estilos.tarjeta, destacado && estilos.tarjetaDestacada]}>
-      {etiqueta && <Text style={[estilos.etiqueta, destacado && estilos.etiquetaDestacada]}>{etiqueta}</Text>}
-
-      <Text style={texto.subtitulo}>{titulo ?? `Atuendo ${numero}`}</Text>
-      {ventajas && (
-        <Text style={[texto.detalle, { marginTop: 2 }]}>
-          {ventajas.length > 0
-            ? `${ventajas.length} ${ventajas.length === 1 ? 'ventaja' : 'ventajas'} para hoy`
-            : 'Sin ventajas extra'}
-        </Text>
-      )}
-
-      {/* El maniquí: una línea vertical une las prendas de arriba abajo */}
-      <View style={estilos.maniqui}>
-        <View style={estilos.columna} />
-        {ordenadas.map((elemento) => (
-          <Prenda key={elemento.prenda.id} {...elemento} esBase={elemento === base} />
+      <View style={estilos.fotos}>
+        {ordenadas.map(({ prenda }) => (
+          <Image
+            key={prenda.id}
+            source={{ uri: urlImagen(prenda.url_imagen) }}
+            style={estilos.foto}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={200}
+            accessibilityLabel={nombreConColor(prenda)}
+          />
         ))}
+        {etiqueta && <Text style={estilos.etiqueta}>{etiqueta}</Text>}
       </View>
 
-      {ventajas?.length > 0 && (
-        <View style={estilos.ventajas}>
-          {ventajas.map((ventaja) => (
-            <View key={ventaja} style={estilos.ventaja}>
-              <IconoVentaja color={colores.acento} size={16} weight="fill" />
-              <Text style={[texto.detalle, { flex: 1, color: colores.texto }]}>{ventaja}</Text>
-            </View>
+      <View style={estilos.cuerpo}>
+        <View style={estilos.cabecera}>
+          <View style={{ flex: 1 }}>
+            <Text style={estilos.look} accessibilityRole="header">
+              Look {numero}
+            </Text>
+            <Text style={texto.nota}>
+              {ventajas.length > 0
+                ? `${ventajas.length} ${ventajas.length === 1 ? 'ventaja' : 'ventajas'} para hoy`
+                : 'Sin ventajas extra'}
+            </Text>
+          </View>
+          <Pressable
+            onPress={alCorazon}
+            accessibilityRole="button"
+            accessibilityLabel="Me gusta este atuendo"
+            accessibilityState={{ selected: conCorazon }}
+            style={({ pressed }) => [estilos.corazon, conCorazon && estilos.corazonActivo, pressed && presionado]}>
+            <IconoCorazon
+              color={conCorazon ? colores.primario : colores.textoSecundario}
+              size={tamañoIcono.m}
+              weight={conCorazon ? 'fill' : 'regular'}
+            />
+          </Pressable>
+        </View>
+        {errorVoto && (
+          <Text style={[texto.detalle, { color: colores.error }]} accessibilityRole="alert">
+            {errorVoto}
+          </Text>
+        )}
+
+        <View style={estilos.prendas}>
+          {ordenadas.map((elemento) => (
+            <Prenda key={elemento.prenda.id} {...elemento} esBase={elemento === base} />
           ))}
         </View>
-      )}
 
-      {alGuardar && (
-        <View style={{ marginTop: espacio.m }}>
-          <Boton
-            texto={guardada ? 'Guardado' : 'Guardar atuendo'}
-            icono={guardada ? IconoPalomita : IconoGuardados}
-            secundario={guardada || !destacado}
-            alPresionar={alGuardar}
-            cargando={guardando}
-            deshabilitado={guardada}
-          />
+        {ventajas.length > 0 && (
+          <View style={estilos.ventajas}>
+            {ventajas.map((ventaja) => (
+              <View key={ventaja} style={estilos.ventaja}>
+                <IconoVentaja color={colores.acento} size={16} weight="fill" />
+                <Text style={[texto.detalle, { flex: 1, color: colores.texto }]}>{ventaja}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {explicacion?.texto && (
+          <View style={estilos.explicacion} accessibilityLiveRegion="polite">
+            <View style={estilos.ventaja}>
+              <IconoIA color={colores.primario} size={16} />
+              <Text style={[texto.antetitulo, { color: colores.primario }]}>Por qué funciona</Text>
+            </View>
+            <Text style={[texto.detalle, { color: colores.texto }]}>{explicacion.texto}</Text>
+          </View>
+        )}
+        {explicacion?.error && (
+          <Text style={[texto.detalle, { color: colores.error }]} accessibilityRole="alert">
+            {explicacion.error}
+          </Text>
+        )}
+
+        <View style={estilos.acciones}>
+          <View style={{ flex: 1 }}>
+            <Boton
+              texto={guardada ? 'Guardado' : 'Guardar'}
+              icono={guardada ? IconoPalomita : IconoGuardados}
+              secundario={guardada || !destacado}
+              alPresionar={alGuardar}
+              cargando={guardando}
+              deshabilitado={guardada}
+            />
+          </View>
+          {!explicacion?.texto && (
+            <View style={{ flex: 1 }}>
+              <Boton
+                texto={explicando ? 'Pensando…' : '¿Por qué?'}
+                icono={IconoIA}
+                secundario
+                alPresionar={alExplicar}
+                cargando={explicando}
+              />
+            </View>
+          )}
         </View>
-      )}
-      {alEliminar && (
-        <View style={{ marginTop: espacio.m }}>
-          <Boton texto="Eliminar" icono={IconoEliminar} peligro alPresionar={alEliminar} cargando={eliminando} />
-        </View>
-      )}
+      </View>
     </View>
   );
 }
 
 const useEstilos = crearEstilos(({ colores, texto, tarjeta }) => ({
-  tarjeta: { ...tarjeta, padding: espacio.m, marginBottom: espacio.m },
+  tarjeta: { ...tarjeta, overflow: 'hidden', marginBottom: espacio.m },
   tarjetaDestacada: { borderWidth: 2, borderColor: colores.primario },
+
+  // Las fotos van de orilla a orilla y separadas por una línea, como una tira de catálogo.
+  fotos: { flexDirection: 'row', gap: 2, backgroundColor: colores.borde },
+  foto: { flex: 1, aspectRatio: 3 / 4, backgroundColor: colores.superficieSuave },
   etiqueta: {
-    alignSelf: 'flex-start',
-    fontFamily: fuentes.negrita,
-    fontSize: 12,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-    color: colores.primario,
-    backgroundColor: colores.primarioSuave,
+    position: 'absolute',
+    top: espacio.s + 4,
+    left: espacio.s + 4,
+    fontFamily: fuentes.media,
+    fontSize: 13,
+    color: colores.sobreAcento,
+    backgroundColor: colores.acento,
     paddingHorizontal: espacio.s + 2,
     paddingVertical: espacio.xs,
     borderRadius: radio.pastilla,
     overflow: 'hidden',
-    marginBottom: espacio.s,
   },
-  // "La mejor opción": dorado de la paleta con texto negro.
-  etiquetaDestacada: { color: colores.sobreAcento, backgroundColor: colores.acento },
 
-  maniqui: { marginTop: espacio.m, gap: espacio.s },
-  columna: {
-    position: 'absolute',
-    top: espacio.m,
-    bottom: espacio.m,
-    left: ANCHO_FOTO / 2 - 1,
-    width: 2,
+  cuerpo: { padding: espacio.m, gap: espacio.m },
+  cabecera: { flexDirection: 'row', alignItems: 'center', gap: espacio.s },
+  corazon: {
+    width: tactil,
+    height: tactil,
+    borderRadius: tactil / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colores.superficieSuave,
   },
-  fila: { flexDirection: 'row', alignItems: 'center', gap: espacio.m },
-  foto: {
-    width: ANCHO_FOTO,
-    aspectRatio: 4 / 5,
-    borderRadius: radio.l,
-    backgroundColor: colores.superficieSuave,
-    borderWidth: 2,
-    borderColor: colores.superficie,
-  },
-  datos: { flex: 1, gap: 2 },
-  filaNombre: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  muestra: { width: 12, height: 12, borderRadius: 6, borderWidth: 1, borderColor: colores.bordeControl },
-  nombre: { ...texto.cuerpoFuerte, flex: 1, fontSize: 15, lineHeight: 20 },
+  corazonActivo: { backgroundColor: colores.primarioSuave },
+  look: { fontFamily: fuentes.displayItalica, fontSize: 32, lineHeight: 40, color: colores.texto },
 
-  ventajas: {
-    marginTop: espacio.m,
-    padding: espacio.m,
-    borderRadius: radio.l,
-    backgroundColor: colores.superficieSuave,
-    gap: espacio.s,
-  },
+  prendas: { gap: espacio.s + 4 },
+  fila: { flexDirection: 'row', alignItems: 'flex-start', gap: espacio.s + 2 },
+  muestra: { width: 12, height: 12, borderRadius: 6, marginTop: 4, borderWidth: 1, borderColor: colores.bordeControl },
+  datos: { flex: 1, minWidth: 0 },
+  nombre: { ...texto.cuerpoFuerte, fontFamily: fuentes.negrita, fontSize: 15, lineHeight: 20 },
+
+  ventajas: { padding: espacio.s + 4, borderRadius: radio.m, backgroundColor: colores.superficieSuave, gap: espacio.s },
   ventaja: { flexDirection: 'row', alignItems: 'center', gap: espacio.s },
+  // La explicación de la IA se lee como una cita: línea rosa a la izquierda.
+  explicacion: { paddingLeft: espacio.m, borderLeftWidth: 3, borderLeftColor: colores.primario, gap: espacio.s },
+  acciones: { flexDirection: 'row', gap: espacio.s },
 }));

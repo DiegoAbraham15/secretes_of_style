@@ -1,10 +1,11 @@
 // Selector de una sola opción: cada opción es una pastilla que se puede tocar (mínimo 44 pt de alto).
 // enLinea: las pastillas quedan en una sola fila que se desliza de lado.
+// etiquetaGrupo: nombre del grupo para el lector de pantalla, si el título va fuera del selector.
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { crearEstilos, espacio, fuentes, presionado, radio } from '../tema';
 
-export function Selector({ titulo, opciones, seleccionado, alCambiar, enLinea = false, estilo }) {
+export function Selector({ titulo, etiquetaGrupo = titulo, opciones, seleccionado, alCambiar, enLinea = false, estilo }) {
   const estilos = useEstilos();
 
   const pastillas = opciones.map((opcion) => {
@@ -24,7 +25,7 @@ export function Selector({ titulo, opciones, seleccionado, alCambiar, enLinea = 
   });
 
   return (
-    <View style={[{ marginBottom: espacio.l }, estilo]} accessibilityRole="radiogroup" accessibilityLabel={titulo}>
+    <View style={[{ marginBottom: espacio.l }, estilo]} accessibilityRole="radiogroup" accessibilityLabel={etiquetaGrupo}>
       {titulo && <Text style={estilos.titulo}>{titulo}</Text>}
       {enLinea ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={estilos.filaEnLinea}>

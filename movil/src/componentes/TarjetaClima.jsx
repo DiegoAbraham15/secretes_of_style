@@ -13,7 +13,7 @@ import {
 import { crearEstilos, espacio, fuentes, radio, tamañoIcono, useTema } from '../tema';
 
 // Las descripciones que manda el servidor (clima.py) con su ícono.
-const ICONO_CLIMA = {
+export const ICONO_CLIMA = {
   Despejado: IconoDespejado,
   Nublado: IconoNublado,
   Niebla: IconoNiebla,
@@ -38,22 +38,20 @@ export function TarjetaClima({ clima, ubicacionAproximada }) {
   return (
     <View style={estilos.tarjeta}>
       <View style={estilos.fila}>
+        <View style={estilos.cuadroIcono}>
+          <Icono color={colores.primario} size={tamañoIcono.m} />
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={estilos.descripcion}>{clima.descripcion}</Text>
+          <Text style={texto.nota}>
+            Se siente de {Math.round(clima.sensacion_termica_c)} °C, lluvia {clima.probabilidad_lluvia} %
+          </Text>
+        </View>
         <Text
           style={estilos.temperatura}
           accessibilityLabel={`${Math.round(clima.temperatura_c)} grados, ${clima.descripcion}`}>
           {Math.round(clima.temperatura_c)}°
         </Text>
-        <View style={{ flex: 1 }}>
-          <View style={estilos.filaDescripcion}>
-            <View style={estilos.circuloIcono}>
-              <Icono color={colores.primario} size={tamañoIcono.m} />
-            </View>
-            <Text style={texto.subtitulo}>{clima.descripcion}</Text>
-          </View>
-          <Text style={texto.detalle}>
-            Se siente de {Math.round(clima.sensacion_termica_c)} °C · lluvia {clima.probabilidad_lluvia} %
-          </Text>
-        </View>
       </View>
 
       {minutos != null && (
@@ -63,16 +61,12 @@ export function TarjetaClima({ clima, ubicacionAproximada }) {
       )}
 
       <View style={estilos.consejos}>
-        <Text style={[texto.antetitulo, { color: colores.primario }]}>Para hoy</Text>
-        {consejos.length === 0 ? (
-          <Text style={[texto.cuerpo, estilos.consejo]}>Clima templado y sin lluvia</Text>
-        ) : (
-          consejos.map((consejo) => (
-            <Text key={consejo} style={[texto.cuerpo, estilos.consejo]}>
-              {consejo}
-            </Text>
-          ))
-        )}
+        {(consejos.length > 0 ? consejos : ['Clima templado y sin lluvia']).map((consejo) => (
+          <View key={consejo} style={estilos.consejo}>
+            <View style={estilos.punto} />
+            <Text style={[texto.detalle, { flex: 1, color: colores.texto }]}>{consejo}</Text>
+          </View>
+        ))}
       </View>
 
       {ubicacionAproximada && (
@@ -85,26 +79,22 @@ export function TarjetaClima({ clima, ubicacionAproximada }) {
   );
 }
 
-const useEstilos = crearEstilos(({ colores, tarjeta }) => ({
-  tarjeta: { ...tarjeta, padding: espacio.m },
-  fila: { flexDirection: 'row', alignItems: 'center', gap: espacio.m },
-  temperatura: { fontFamily: fuentes.negra, fontSize: 64, lineHeight: 68, letterSpacing: -3, color: colores.texto },
-  filaDescripcion: { flexDirection: 'row', alignItems: 'center', gap: espacio.s, marginBottom: 2 },
-  circuloIcono: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+const useEstilos = crearEstilos(({ colores }) => ({
+  tarjeta: { padding: espacio.m, borderRadius: radio.l, backgroundColor: colores.superficieSuave },
+  fila: { flexDirection: 'row', alignItems: 'center', gap: espacio.s + 4 },
+  cuadroIcono: {
+    width: 44,
+    height: 44,
+    borderRadius: radio.m,
     backgroundColor: colores.primarioSuave,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Los consejos van en un bloque suave dentro de la tarjeta (Soft UI: capas en vez de líneas).
-  consejos: {
-    marginTop: espacio.m,
-    padding: espacio.m,
-    borderRadius: radio.l,
-    backgroundColor: colores.superficieSuave,
-  },
-  consejo: { marginTop: espacio.xs },
-  filaUbicacion: { flexDirection: 'row', alignItems: 'center', gap: espacio.s, marginTop: espacio.m },
+  descripcion: { fontFamily: fuentes.negrita, fontSize: 15, lineHeight: 20, color: colores.texto },
+  temperatura: { fontFamily: fuentes.display, fontSize: 40, lineHeight: 48, color: colores.texto },
+  // Los consejos van debajo de una línea fina, cada uno con su punto.
+  consejos: { marginTop: espacio.s + 4, paddingTop: espacio.s + 4, borderTopWidth: 1, borderTopColor: colores.borde, gap: espacio.xs },
+  consejo: { flexDirection: 'row', alignItems: 'center', gap: espacio.s },
+  punto: { width: 6, height: 6, borderRadius: 3, backgroundColor: colores.primario },
+  filaUbicacion: { flexDirection: 'row', alignItems: 'center', gap: espacio.s, marginTop: espacio.s + 4 },
 }));

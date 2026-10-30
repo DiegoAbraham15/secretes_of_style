@@ -49,7 +49,7 @@ export function Boton({
 const useEstilos = crearEstilos(({ colores }) => ({
   boton: {
     minHeight: 52,
-    borderRadius: radio.l,
+    borderRadius: radio.pastilla,
     backgroundColor: colores.primario,
     flexDirection: 'row',
     gap: espacio.s,
@@ -59,5 +59,5 @@ const useEstilos = crearEstilos(({ colores }) => ({
   },
   contorno: { backgroundColor: colores.superficie, borderWidth: 1.5, borderColor: colores.primario },
   deshabilitado: { opacity: 0.45 },
-  texto: { fontFamily: fuentes.negrita, fontSize: 15, letterSpacing: 0.6, textTransform: 'uppercase' },
+  texto: { fontFamily: fuentes.negrita, fontSize: 16 },
 }));

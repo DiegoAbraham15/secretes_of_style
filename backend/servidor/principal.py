@@ -13,11 +13,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from servidor.algoritmos import ALGORITMOS
+from servidor.aprendizaje import (ACCESORIOS, CANDIDATOS, PESOS_DE_RESPUESTA, RESPUESTA_POR_DEFECTO, caracteristicas_de,
+                                  entrenar, firma_de, pesos_iniciales, reordenar)
 from servidor.base_datos import CARPETA_ARCHIVOS, consultar, consultar_uno, crear_tablas, ejecutar
 from servidor.busqueda import recomendar
 from servidor.clima import obtener_clima
-from servidor.logica import COLORES_NEUTROS, COLORES_VIVOS
+from servidor.explicacion import explicar_atuendo
+from servidor.logica import COLORES_NEUTROS, COLORES_VIVOS, ESTAMPADOS, ESTILOS, OCASIONES, hechos_de_ocasion
 from servidor.seguridad import crear_token, generar_hash, usuario_actual, verificar_contraseña
+from servidor.vision import detectar_prenda
 
 CATEGORIAS = ["parte_superior", "parte_inferior", "calzado", "abrigo", "accesorio"]
 ESTADOS = ["disponible", "en_lavado", "archivada"]
@@ -84,7 +89,7 @@ def iniciar_sesion(datos: Cuenta):
 
 @aplicacion.get("/api/auth/yo")
 def usuario_de_la_sesion(usuario: dict = Depends(usuario_actual)):
-    return usuario
+    return {**usuario, "cuestionario_listo": leer_preferencias(usuario["id"]) is not None}
 
 
 @aplicacion.post("/api/auth/cerrar-sesion", status_code=204)
@@ -161,15 +166,20 @@ def extension_de_imagen(contenido: bytes) -> str | None:
     return None
 
 
-async def guardar_imagen(archivo: UploadFile, carpeta: str) -> str:
-    """Guarda la imagen en disco y devuelve su ruta pública, p. ej. /archivos/prendas/abc.jpg."""
-    maximo_bytes = MAXIMO_IMAGEN_MB * 1024 * 1024
-    contenido = await archivo.read(maximo_bytes + 1)  # un byte de más basta para saber si se pasa
-    if len(contenido) > maximo_bytes:
+def revisar_imagen(contenido: bytes) -> str:
+    """Rechaza archivos muy pesados o que no son imagen; devuelve la extensión."""
+    if len(contenido) > MAXIMO_IMAGEN_MB * 1024 * 1024:
         raise HTTPException(413, f"La imagen supera {MAXIMO_IMAGEN_MB} MB")
     extension = extension_de_imagen(contenido)
     if extension is None:
         raise HTTPException(415, "El archivo no es una imagen JPG, PNG, WEBP o HEIC.")
+    return extension
+
+
+async def guardar_imagen(archivo: UploadFile, carpeta: str) -> str:
+    """Guarda la imagen en disco y devuelve su ruta pública, p. ej. /archivos/prendas/abc.jpg."""
+    contenido = await archivo.read(MAXIMO_IMAGEN_MB * 1024 * 1024 + 1)  # un byte de más basta para saber si se pasa
+    extension = revisar_imagen(contenido)
 
     nombre = f"{uuid.uuid4().hex}{extension}"
     (CARPETA_ARCHIVOS / carpeta).mkdir(parents=True, exist_ok=True)
@@ -202,18 +212,34 @@ async def subir_prenda(
     nivel_abrigo: int = Form(...),
     impermeable: bool = Form(False),
     subcategoria: str = Form(""),
+    estampado: str = Form("liso"),
+    estilo: str = Form("casual"),
     usuario: dict = Depends(usuario_actual),
 ):
     if categoria not in CATEGORIAS or color_principal not in COLORES or not 1 <= nivel_abrigo <= 5:
         raise HTTPException(422, "Revisa la categoría, el color y el nivel de abrigo (1 a 5)")
+    if estampado not in ESTAMPADOS or estilo not in ESTILOS:
+        raise HTTPException(422, "Revisa el estampado y el estilo")
 
     prenda_id = ejecutar(
         "INSERT INTO prendas (usuario_id, url_imagen, categoria, subcategoria, color_principal, nivel_abrigo,"
-        " impermeable, estado, fecha_creacion) VALUES (?, ?, ?, ?, ?, ?, ?, 'disponible', datetime('now'))",
+        " impermeable, estampado, estilo, estado, fecha_creacion)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'disponible', datetime('now'))",
         (usuario["id"], await guardar_imagen(imagen, "prendas"), categoria, subcategoria.strip()[:60] or None,
-         color_principal, nivel_abrigo, impermeable),
+         color_principal, nivel_abrigo, impermeable, estampado, estilo),
     )
     return buscar_prenda(prenda_id, usuario)
+
+
+@aplicacion.post("/api/prendas/analizar")
+def analizar_prenda(imagen: UploadFile = File(...), _usuario: dict = Depends(usuario_actual)):
+    """Datos de la prenda que propone el modelo de visión para llenar el formulario. No guarda nada.
+
+    Es def (no async) para que FastAPI la corra en otro hilo mientras Ollama responde.
+    """
+    contenido = imagen.file.read(MAXIMO_IMAGEN_MB * 1024 * 1024 + 1)
+    revisar_imagen(contenido)
+    return detectar_prenda(contenido)
 
 
 @aplicacion.get("/api/prendas")
@@ -255,6 +281,38 @@ def cambiar_estado(prenda_id: int, datos: CambioEstado, usuario: dict = Depends(
     return buscar_prenda(prenda_id, usuario)
 
 
+class CambioEstilo(BaseModel):
+    estampado: str
+    estilo: str
+
+
+@aplicacion.patch("/api/prendas/{prenda_id}/estilo")
+def cambiar_estilo(prenda_id: int, datos: CambioEstilo, usuario: dict = Depends(usuario_actual)):
+    """Corrige el estampado y el estilo, p. ej. de prendas registradas antes de que existieran."""
+    buscar_prenda(prenda_id, usuario)
+    if datos.estampado not in ESTAMPADOS or datos.estilo not in ESTILOS:
+        raise HTTPException(422, "Revisa el estampado y el estilo")
+    ejecutar("UPDATE prendas SET estampado = ?, estilo = ? WHERE id = ?", (datos.estampado, datos.estilo, prenda_id))
+    return buscar_prenda(prenda_id, usuario)
+
+
+@aplicacion.post("/api/prendas/{prenda_id}/detectar-estilo")
+def detectar_estilo(prenda_id: int, usuario: dict = Depends(usuario_actual)):
+    """La IA vuelve a mirar la foto guardada y actualiza el estampado y el estilo.
+
+    Sirve para las prendas registradas antes de la IA, que quedaron como lisas y casuales.
+    """
+    prenda = buscar_prenda(prenda_id, usuario)
+    foto = CARPETA_ARCHIVOS / prenda["url_imagen"].removeprefix("/archivos/")
+    if not foto.exists():
+        raise HTTPException(404, "La foto de la prenda ya no existe")
+    deteccion = detectar_prenda(foto.read_bytes())
+    estampado = deteccion["estampado"] or prenda["estampado"]
+    estilo = deteccion["estilo"] or prenda["estilo"]
+    ejecutar("UPDATE prendas SET estampado = ?, estilo = ? WHERE id = ?", (estampado, estilo, prenda_id))
+    return buscar_prenda(prenda_id, usuario)
+
+
 @aplicacion.delete("/api/prendas/{prenda_id}", status_code=204)
 def eliminar_prenda(prenda_id: int, usuario: dict = Depends(usuario_actual)):
     prenda = buscar_prenda(prenda_id, usuario)
@@ -275,20 +333,159 @@ def consultar_clima(latitud: float, longitud: float, _usuario: dict = Depends(us
 # RECOMENDACIONES Y ATUENDOS
 # ============================================================
 
+def leer_pesos(usuario_id: int) -> dict:
+    fila = consultar_uno("SELECT pesos FROM pesos_usuario WHERE usuario_id = ?", (usuario_id,))
+    return json.loads(fila["pesos"]) if fila else {}  # sin votos: pesos en cero, el orden de A*
+
+
+def leer_votos(usuario_id: int) -> list[dict]:
+    """Los votos de la persona, del más viejo al más nuevo."""
+    votos = consultar("SELECT firma, me_gusta, caracteristicas FROM votos_atuendo WHERE usuario_id = ? ORDER BY id", (usuario_id,))
+    return [{**v, "caracteristicas": json.loads(v["caracteristicas"])} for v in votos]
+
+
+def leer_preferencias(usuario_id: int) -> dict | None:
+    return consultar_uno("SELECT * FROM preferencias_usuario WHERE usuario_id = ?", (usuario_id,))
+
+
+def reentrenar(usuario_id: int) -> int:
+    """Vuelve a calcular los pesos con el cuestionario y todos los votos; devuelve cuántos votos son."""
+    votos = leer_votos(usuario_id)
+    iniciales = pesos_iniciales(leer_preferencias(usuario_id) or {})
+    ejecutar(
+        "INSERT INTO pesos_usuario (usuario_id, pesos) VALUES (?, ?) ON CONFLICT (usuario_id) "
+        "DO UPDATE SET pesos = excluded.pesos, fecha_actualizacion = CURRENT_TIMESTAMP",
+        (usuario_id, json.dumps(entrenar(votos, iniciales))),
+    )
+    return len(votos)
+
+
+def guardar_voto(usuario_id: int, prendas: list[dict], me_gusta: int) -> int:
+    """Guarda el voto de un atuendo (si ya tenía, lo reemplaza), reentrena y devuelve cuántos votos hay.
+
+    Las características se calculan aquí con las prendas de la base; no se le creen a la app.
+    """
+    ejecutar(
+        "INSERT INTO votos_atuendo (usuario_id, firma, me_gusta, caracteristicas) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT (usuario_id, firma) DO UPDATE SET me_gusta = excluded.me_gusta, caracteristicas = excluded.caracteristicas",
+        (usuario_id, firma_de([p["id"] for p in prendas]), me_gusta, json.dumps(caracteristicas_de(prendas))),
+    )
+    return reentrenar(usuario_id)
+
+
+def registrar_sin_corazon(usuario_id: int, sugerencias: list[dict]) -> None:
+    """Un atuendo que se muestra cuenta como "no me gusta" hasta que reciba corazón.
+
+    Estos atuendos ya salieron ordenados con los pesos anteriores, así que el voto se nota hasta la siguiente
+    vez: si la persona les da corazón antes, el voto cambia y no se castigan.
+    """
+    nuevas = [s for s in sugerencias if s["voto"] is None]
+    for sugerencia in nuevas:
+        prendas = [e["prenda"] for e in sugerencia["elementos"]]
+        ejecutar(
+            "INSERT INTO votos_atuendo (usuario_id, firma, me_gusta, caracteristicas) VALUES (?, ?, -1, ?) "
+            "ON CONFLICT (usuario_id, firma) DO NOTHING",
+            (usuario_id, firma_de([p["id"] for p in prendas]), json.dumps(caracteristicas_de(prendas))),
+        )
+    if nuevas:
+        reentrenar(usuario_id)
+
+
+class Preferencias(BaseModel):
+    paleta: str = RESPUESTA_POR_DEFECTO["paleta"]
+    ropa: str = RESPUESTA_POR_DEFECTO["ropa"]
+    estampados: str = RESPUESTA_POR_DEFECTO["estampados"]
+    accesorios: str = RESPUESTA_POR_DEFECTO["accesorios"]
+
+
+@aplicacion.put("/api/preferencias")
+def guardar_preferencias(datos: Preferencias, usuario: dict = Depends(usuario_actual)):
+    """Guarda el cuestionario de estilo y recalcula los pesos sin perder los votos. Omitirlo manda los valores por defecto."""
+    if (datos.paleta not in PESOS_DE_RESPUESTA["paleta"] or datos.ropa not in PESOS_DE_RESPUESTA["ropa"]
+            or datos.estampados not in PESOS_DE_RESPUESTA["estampados"] or datos.accesorios not in ACCESORIOS):
+        raise HTTPException(422, "Revisa las respuestas del cuestionario")
+    ejecutar(
+        "INSERT INTO preferencias_usuario (usuario_id, paleta, ropa, estampados, accesorios) VALUES (?, ?, ?, ?, ?) "
+        "ON CONFLICT (usuario_id) DO UPDATE SET paleta = excluded.paleta, ropa = excluded.ropa, "
+        "estampados = excluded.estampados, accesorios = excluded.accesorios, fecha_actualizacion = CURRENT_TIMESTAMP",
+        (usuario["id"], datos.paleta, datos.ropa, datos.estampados, datos.accesorios),
+    )
+    reentrenar(usuario["id"])
+    return leer_preferencias(usuario["id"])
+
+
 class SolicitudRecomendacion(BaseModel):
     prenda_base_id: int
     latitud: float
     longitud: float
     cantidad: int = Field(default=3, ge=1, le=10)
+    algoritmo: str = "astar"  # la app no lo manda: siempre usa A*
+    ocasion: str = "diario"
 
 
 @aplicacion.post("/api/recomendaciones")
 def generar_recomendaciones(datos: SolicitudRecomendacion, usuario: dict = Depends(usuario_actual)):
-    """Los mejores atuendos con la prenda base según A* y el clima real."""
+    """Los mejores atuendos con la prenda base según A* (u otro algoritmo), el clima real y la ocasión.
+
+    Con A*, que es lo que usa la app, se piden más candidatos y el perceptrón los ordena según los gustos de la
+    persona. Los otros algoritmos no pasan por él: existen para compararlos y deben devolver su propio resultado.
+    """
+    if datos.algoritmo not in ALGORITMOS:
+        raise HTTPException(422, f"El algoritmo debe ser uno de: {', '.join(ALGORITMOS)}")
+    if datos.ocasion not in OCASIONES:
+        raise HTTPException(422, f"La ocasión debe ser una de: {', '.join(OCASIONES)}")
     base = buscar_prenda(datos.prenda_base_id, usuario)
     clima = obtener_clima(datos.latitud, datos.longitud)
     armario = [preparar_prenda(p) for p in consultar("SELECT * FROM prendas WHERE usuario_id = ?", (usuario["id"],))]
-    return {"clima": clima, "prenda_base": base, **recomendar(base, armario, set(clima["hechos"]), datos.cantidad)}
+    hechos = set(clima["hechos"]) | hechos_de_ocasion(datos.ocasion)
+    con_gustos = datos.algoritmo == "astar"
+    cantidad = max(datos.cantidad, CANDIDATOS) if con_gustos else datos.cantidad
+    preferencias = leer_preferencias(usuario["id"]) or {}
+    sugerencias = recomendar(base, armario, hechos, cantidad, ALGORITMOS[datos.algoritmo],
+                             con_accesorio=preferencias.get("accesorios") != "casi_nunca")
+    if con_gustos:
+        votos = leer_votos(usuario["id"])
+        gustados = [v["caracteristicas"] for v in votos if v["me_gusta"] == 1]
+        por_firma = {v["firma"]: v["me_gusta"] for v in votos}
+        ordenadas = reordenar(sugerencias["sugerencias"], leer_pesos(usuario["id"]), por_firma, gustados)
+        sugerencias["sugerencias"] = ordenadas[:datos.cantidad]
+        registrar_sin_corazon(usuario["id"], sugerencias["sugerencias"])
+    return {"clima": clima, "prenda_base": base, "ocasion": datos.ocasion, **sugerencias}
+
+
+class SolicitudExplicacion(BaseModel):
+    prenda_ids: list[int] = Field(min_length=1, max_length=6)  # la primera es la prenda base
+    latitud: float
+    longitud: float
+    ocasion: str = "diario"
+
+
+@aplicacion.post("/api/recomendaciones/explicacion")
+def explicar_recomendacion(datos: SolicitudExplicacion, usuario: dict = Depends(usuario_actual)):
+    """Por qué funciona un atuendo, en lenguaje natural. Los hechos los pone la lógica; la IA solo redacta.
+
+    Es def (no async) para que FastAPI la corra en otro hilo mientras Ollama responde.
+    """
+    if datos.ocasion not in OCASIONES:
+        raise HTTPException(422, f"La ocasión debe ser una de: {', '.join(OCASIONES)}")
+    prendas = [buscar_prenda(prenda_id, usuario) for prenda_id in datos.prenda_ids]
+    clima = obtener_clima(datos.latitud, datos.longitud)  # se reutiliza el de la recomendación (caché de 30 min)
+    return {"explicacion": explicar_atuendo(prendas, clima, datos.ocasion)}
+
+
+class VotoAtuendo(BaseModel):
+    prenda_ids: list[int] = Field(min_length=2, max_length=6)
+    me_gusta: bool
+
+
+@aplicacion.post("/api/atuendos/voto")
+def votar_atuendo(datos: VotoAtuendo, usuario: dict = Depends(usuario_actual)):
+    """Poner o quitar el corazón de un atuendo."""
+    if len(set(datos.prenda_ids)) != len(datos.prenda_ids):
+        raise HTTPException(422, "Un atuendo no puede repetir prendas")
+    prendas = [buscar_prenda(prenda_id, usuario) for prenda_id in datos.prenda_ids]
+    me_gusta = 1 if datos.me_gusta else -1
+    return {"voto": me_gusta, "votos": guardar_voto(usuario["id"], prendas, me_gusta)}
 
 
 class ElementoNuevo(BaseModel):
@@ -318,8 +515,8 @@ def leer_atuendo(atuendo: dict) -> dict:
 def guardar_atuendo(datos: AtuendoNuevo, usuario: dict = Depends(usuario_actual)):
     if not datos.elementos:
         raise HTTPException(422, "El atuendo necesita al menos una prenda")
-    for elemento in datos.elementos:
-        buscar_prenda(elemento.prenda_id, usuario)  # comprueba que cada prenda sea del usuario
+    # buscar_prenda comprueba que cada prenda sea del usuario.
+    prendas = [buscar_prenda(elemento.prenda_id, usuario) for elemento in datos.elementos]
 
     atuendo_id = ejecutar(
         "INSERT INTO atuendos (usuario_id, puntuacion, reporte_clima, fecha_creacion) VALUES (?, ?, ?, datetime('now'))",
@@ -330,6 +527,7 @@ def guardar_atuendo(datos: AtuendoNuevo, usuario: dict = Depends(usuario_actual)
             "INSERT INTO atuendo_elementos (atuendo_id, prenda_id, rol) VALUES (?, ?, ?)",
             (atuendo_id, elemento.prenda_id, elemento.rol),
         )
+    guardar_voto(usuario["id"], prendas, 1)  # guardar un atuendo cuenta como darle corazón
     return leer_atuendo(consultar_uno("SELECT * FROM atuendos WHERE id = ?", (atuendo_id,)))
 
 

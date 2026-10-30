@@ -3,11 +3,22 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 
-import { cambiarEstadoPrenda, eliminarPrenda, obtenerPrenda, urlImagen } from '../../../api';
+import {
+  cambiarEstadoPrenda,
+  cambiarEstiloPrenda,
+  detectarEstiloPrenda,
+  eliminarPrenda,
+  obtenerPrenda,
+  urlImagen,
+} from '../../../api';
 import {
   ESTADOS,
+  ESTAMPADOS,
+  ESTILOS,
   ETIQUETA_CATEGORIA,
   ETIQUETA_COLOR,
+  ETIQUETA_ESTAMPADO,
+  ETIQUETA_ESTILO,
   HEX_COLOR,
   NIVELES_ABRIGO,
   nombreDePrenda,
@@ -15,7 +26,7 @@ import {
 import { Boton } from '../../../componentes/Boton';
 import { Selector } from '../../../componentes/Selector';
 import { confirmar } from '../../../confirmar';
-import { IconoEliminar } from '../../../iconos';
+import { IconoEliminar, IconoIA } from '../../../iconos';
 import { Aparecer, vibrar } from '../../../movimiento';
 import { crearEstilos, espacio, radio, useTema } from '../../../tema';
 
@@ -33,6 +44,7 @@ export default function PantallaPrenda() {
   const [error, establecerError] = useState(null);
   const [cambiando, establecerCambiando] = useState(false);
   const [eliminando, establecerEliminando] = useState(false);
+  const [detectando, establecerDetectando] = useState(false);
 
   useEffect(() => {
     obtenerPrenda(id)
@@ -51,6 +63,35 @@ export default function PantallaPrenda() {
       establecerError(e.message);
     } finally {
       establecerCambiando(false);
+    }
+  }
+
+  // Estampado y estilo se guardan juntos; la búsqueda los usa para los estampados y la ocasión.
+  async function cambiarEstilo(cambios) {
+    if (cambiando) return;
+    const nuevo = { estampado: prenda.estampado, estilo: prenda.estilo, ...cambios };
+    establecerCambiando(true);
+    establecerError(null);
+    try {
+      establecerPrenda(await cambiarEstiloPrenda(prenda.id, nuevo.estampado, nuevo.estilo));
+      vibrar.seleccion();
+    } catch (e) {
+      establecerError(e.message);
+    } finally {
+      establecerCambiando(false);
+    }
+  }
+
+  async function detectarConIA() {
+    establecerDetectando(true);
+    establecerError(null);
+    try {
+      establecerPrenda(await detectarEstiloPrenda(prenda.id));
+      vibrar.exito();
+    } catch (e) {
+      establecerError(e.message);
+    } finally {
+      establecerDetectando(false);
     }
   }
 
@@ -81,6 +122,8 @@ export default function PantallaPrenda() {
 
   const detalles = [
     ETIQUETA_CATEGORIA[prenda.categoria],
+    ETIQUETA_ESTILO[prenda.estilo]?.toLowerCase(),
+    prenda.estampado !== 'liso' && ETIQUETA_ESTAMPADO[prenda.estampado]?.toLowerCase(),
     `abrigo ${NIVELES_ABRIGO[prenda.nivel_abrigo - 1].etiqueta.slice(2).toLowerCase()} (${prenda.nivel_abrigo} de 5)`,
     prenda.impermeable && 'impermeable',
   ];
@@ -101,13 +144,34 @@ export default function PantallaPrenda() {
         <Text style={estilos.nombre}>
           {nombreDePrenda(prenda)} {ETIQUETA_COLOR[prenda.color_principal].toLowerCase()}
         </Text>
-        <Text style={[texto.detalle, { textAlign: 'center' }]}>{detalles.filter(Boolean).join(' · ')}</Text>
+        <Text style={[texto.detalle, { textAlign: 'center' }]}>{detalles.filter(Boolean).join(', ')}</Text>
       </Aparecer>
 
       <Selector titulo="Estado" opciones={ESTADOS} seleccionado={prenda.estado} alCambiar={cambiarEstado} />
       <Text style={[texto.detalle, { marginTop: -espacio.s, marginBottom: espacio.xl }]}>
         {cambiando ? 'Guardando…' : EXPLICACION_ESTADO[prenda.estado]}
       </Text>
+
+      <Selector
+        titulo="Estampado"
+        opciones={ESTAMPADOS}
+        seleccionado={prenda.estampado}
+        alCambiar={(estampado) => estampado !== prenda.estampado && cambiarEstilo({ estampado })}
+      />
+      <Selector
+        titulo="Estilo"
+        opciones={ESTILOS}
+        seleccionado={prenda.estilo}
+        alCambiar={(estilo) => estilo !== prenda.estilo && cambiarEstilo({ estilo })}
+      />
+      <Boton
+        texto={detectando ? 'Mirando la foto…' : 'Detectar estampado y estilo con IA'}
+        icono={IconoIA}
+        secundario
+        alPresionar={detectarConIA}
+        cargando={detectando}
+      />
+      <View style={{ height: espacio.xl }} />
 
       {error && (
         <Text style={estilos.error} accessibilityLiveRegion="polite" accessibilityRole="alert">

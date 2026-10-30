@@ -2,14 +2,25 @@ import { Image } from 'expo-image';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 
-import { subirPrenda } from '../../api';
-import { CATEGORIAS, COLORES, ETIQUETA_CATEGORIA, ETIQUETA_COLOR, HEX_COLOR, NIVELES_ABRIGO } from '../../catalogos';
+import { analizarPrenda, subirPrenda } from '../../api';
+import {
+  CATEGORIAS,
+  COLORES,
+  ESTAMPADOS,
+  ESTILOS,
+  ETIQUETA_CATEGORIA,
+  ETIQUETA_COLOR,
+  ETIQUETA_ESTAMPADO,
+  HEX_COLOR,
+  NIVELES_ABRIGO,
+} from '../../catalogos';
 import { Boton } from '../../componentes/Boton';
+import { Campo } from '../../componentes/Campo';
 import { Selector } from '../../componentes/Selector';
-import { IconoCamara, IconoGaleria } from '../../iconos';
+import { IconoCamara, IconoGaleria, IconoIA } from '../../iconos';
 import { Presionable, vibrar } from '../../movimiento';
 import { crearEstilos, espacio, fuentes, presionado, radio, tactil, tamañoIcono, useTema } from '../../tema';
 
@@ -37,16 +48,48 @@ function BotonFoto({ icono: Icono, texto: etiqueta, alPresionar }) {
 }
 
 export default function PantallaNuevaPrenda() {
-  const { colores, texto, oscuro } = useTema();
+  const { colores, texto } = useTema();
   const estilos = useEstilos();
   const [imagen, establecerImagen] = useState(null); // { uri, nombre }
   const [categoria, establecerCategoria] = useState(null);
   const [subcategoria, establecerSubcategoria] = useState('');
   const [color, establecerColor] = useState(null);
+  const [estampado, establecerEstampado] = useState('liso');
+  const [estilo, establecerEstilo] = useState('casual');
   const [nivelAbrigo, establecerNivelAbrigo] = useState(null);
   const [impermeable, establecerImpermeable] = useState(false);
   const [error, establecerError] = useState(null);
   const [guardando, establecerGuardando] = useState(false);
+  const [analisis, establecerAnalisis] = useState(null); // { cargando } o { texto, error }
+  const fotoActual = useRef(null); // si cambian la foto mientras se analiza, se ignora la respuesta vieja
+
+  // La IA del servidor propone los datos de la prenda; la persona los revisa y corrige antes de guardar.
+  async function analizar(uri) {
+    fotoActual.current = uri;
+    establecerAnalisis({ cargando: true });
+    try {
+      const prenda = await analizarPrenda(uri, 'prenda.jpg');
+      if (fotoActual.current !== uri) return;
+      if (prenda.categoria) establecerCategoria(prenda.categoria);
+      if (prenda.subcategoria) establecerSubcategoria(prenda.subcategoria);
+      if (prenda.color_principal) establecerColor(prenda.color_principal);
+      if (prenda.estampado) establecerEstampado(prenda.estampado);
+      if (prenda.estilo) establecerEstilo(prenda.estilo);
+      if (prenda.nivel_abrigo) establecerNivelAbrigo(prenda.nivel_abrigo);
+      establecerImpermeable(prenda.impermeable);
+      const resumen = [
+        prenda.subcategoria || ETIQUETA_CATEGORIA[prenda.categoria],
+        ETIQUETA_COLOR[prenda.color_principal],
+        ETIQUETA_ESTAMPADO[prenda.estampado],
+      ]
+        .filter(Boolean)
+        .join(', ');
+      establecerAnalisis({ texto: `Detectado con IA: ${resumen}. Revisa los datos antes de guardar.` });
+    } catch {
+      if (fotoActual.current !== uri) return;
+      establecerAnalisis({ error: true, texto: 'No se pudo analizar la foto; llena los datos a mano.' });
+    }
+  }
 
   async function elegirImagen(desdeCamara) {
     const permiso = desdeCamara
@@ -64,12 +107,16 @@ export default function PantallaNuevaPrenda() {
       : await ImagePicker.launchImageLibraryAsync(opciones);
     if (resultado.canceled) return;
 
+    let uri;
     try {
-      establecerImagen({ uri: await reducirFoto(resultado.assets[0]), nombre: 'prenda.jpg' });
+      uri = await reducirFoto(resultado.assets[0]);
+      establecerImagen({ uri, nombre: 'prenda.jpg' });
       establecerError(null);
     } catch {
       establecerError('No se pudo preparar la foto. Intenta con otra.');
+      return;
     }
+    analizar(uri);
   }
 
   async function guardar() {
@@ -88,6 +135,8 @@ export default function PantallaNuevaPrenda() {
         color_principal: color,
         nivel_abrigo: nivelAbrigo,
         impermeable,
+        estampado,
+        estilo,
       });
       vibrar.exito();
       router.back();
@@ -127,9 +176,27 @@ export default function PantallaNuevaPrenda() {
               {subcategoria.trim() || ETIQUETA_CATEGORIA[categoria] || 'Tu prenda'}
             </Text>
             <Text style={texto.nota}>
-              {[ETIQUETA_COLOR[color], nivelAbrigo && `abrigo ${nivelAbrigo} de 5`, impermeable && 'impermeable']
+              {[
+                ETIQUETA_COLOR[color],
+                estampado !== 'liso' && ETIQUETA_ESTAMPADO[estampado].toLowerCase(),
+                nivelAbrigo && `abrigo ${nivelAbrigo} de 5`,
+                impermeable && 'impermeable',
+              ]
                 .filter(Boolean)
-                .join(' · ') || 'Completa los datos de abajo'}
+                .join(', ') || 'Completa los datos de abajo'}
+            </Text>
+          </View>
+        )}
+
+        {analisis && (
+          <View style={estilos.avisoIA} accessibilityLiveRegion="polite">
+            {analisis.cargando ? (
+              <ActivityIndicator color={colores.primario} size="small" />
+            ) : (
+              <IconoIA color={analisis.error ? colores.error : colores.primario} size={tamañoIcono.s} />
+            )}
+            <Text style={[texto.detalle, { flex: 1 }, analisis.error && { color: colores.error }]}>
+              {analisis.cargando ? 'Analizando la foto con IA…' : analisis.texto}
             </Text>
           </View>
         )}
@@ -149,19 +216,19 @@ export default function PantallaNuevaPrenda() {
       <Text style={texto.antetitulo} nativeID="etiquetaTipo">
         Tipo de prenda (opcional)
       </Text>
-      <TextInput
+      <Campo
         value={subcategoria}
         onChangeText={establecerSubcategoria}
         placeholder="Blusa, jeans, botines"
-        placeholderTextColor={colores.textoSecundario}
         maxLength={60}
-        keyboardAppearance={oscuro ? 'dark' : 'light'}
         accessibilityLabel="Tipo de prenda, opcional"
         accessibilityLabelledBy="etiquetaTipo"
-        style={estilos.campo}
+        estilo={estilos.campo}
       />
 
       <Selector titulo="Color principal" opciones={COLORES} seleccionado={color} alCambiar={establecerColor} />
+      <Selector titulo="Estampado" opciones={ESTAMPADOS} seleccionado={estampado} alCambiar={establecerEstampado} />
+      <Selector titulo="Estilo" opciones={ESTILOS} seleccionado={estilo} alCambiar={establecerEstilo} />
       <Selector
         titulo="Nivel de abrigo"
         opciones={NIVELES_ABRIGO}
@@ -222,6 +289,17 @@ const useEstilos = crearEstilos(({ colores, texto }) => ({
     borderWidth: 2,
     borderColor: colores.superficie,
   },
+  avisoIA: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: espacio.s,
+    marginTop: espacio.m,
+    paddingVertical: espacio.s,
+    paddingHorizontal: espacio.m,
+    borderRadius: radio.m,
+    backgroundColor: colores.superficieSuave,
+  },
   botonesFoto: { flexDirection: 'row', gap: espacio.s, marginTop: espacio.m },
   botonFoto: {
     minHeight: tactil,
@@ -235,16 +313,7 @@ const useEstilos = crearEstilos(({ colores, texto }) => ({
     backgroundColor: colores.superficie,
   },
   textoBotonFoto: { fontFamily: fuentes.negrita, fontSize: 15, color: colores.primario },
-  campo: {
-    minHeight: tactil,
-    fontFamily: fuentes.regular,
-    fontSize: 16,
-    color: colores.texto,
-    borderBottomWidth: 1.5,
-    borderBottomColor: colores.bordeControl,
-    marginTop: espacio.xs,
-    marginBottom: espacio.l,
-  },
+  campo: { marginTop: espacio.s, marginBottom: espacio.l },
   interruptor: { flexDirection: 'row', alignItems: 'center', minHeight: tactil, marginBottom: espacio.l },
   error: { ...texto.detalle, color: colores.error, marginBottom: espacio.m },
 }));

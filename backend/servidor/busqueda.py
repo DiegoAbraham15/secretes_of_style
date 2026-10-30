@@ -13,10 +13,13 @@ Costo g de agregar una prenda:
   color    armonía con lo que ya llevas: neutro 1, mismo color 2, complementarios 3
   clima    distancia de la prenda al punto ideal
   lógica   +3 si las reglas dicen que la prenda no es apta para el clima (p. ej. ligera con frío)
+  ocasión  +20 si no va con la ocasión (p. ej. jeans o tenis en una ocasión formal): vale más que todo
+           lo demás junto, así la ocasión siempre gana y una prenda fuera de lugar solo sale si no hay otra
   lluvia   +2 si llueve y es un abrigo que no es impermeable
+  estampado +2 si la prenda tiene estampado y ya hay otra estampada en el atuendo (se recargan)
 
 Heurística h: por cada categoría que falta, el costo más bajo posible entre sus prendas (contando
-el color como 1). Nunca sobreestima y es consistente, así que A* saca los atuendos completos de la
+el color como 1 y sin el castigo de estampados). Nunca sobreestima y es consistente, así que A* saca los atuendos completos de la
 frontera de menor a mayor costo: si no se detiene en el primero, los primeros son los más baratos.
 """
 
@@ -24,11 +27,14 @@ import heapq
 import math
 from itertools import count
 
-from servidor.logica import es_apta, hechos_de_colores, por_que_combinan, razonar_clima, ventajas_del_atuendo
+from servidor.logica import (deducir_de_prenda, es_apta, hechos_de_colores, por_que_combinan, razonar_clima,
+                             se_recargan, ventajas_del_atuendo)
 
 REQUERIDAS = ["parte_superior", "parte_inferior", "calzado"]
 PENALIZACION_NO_APTA = 3
+PENALIZACION_OCASION = 20  # lo más que suman clima, lógica, lluvia, estampados y color es 17
 PENALIZACION_LLUVIA = 2
+PENALIZACION_ESTAMPADOS = 2
 
 # Tono de cada color, de 1 (muy claro) a 5 (muy oscuro): el segundo eje del plano de estilo.
 TONO = {
@@ -71,16 +77,21 @@ def costo_sin_color(prenda: dict, problema: dict) -> int:
     """La parte del costo que no depende del atuendo: clima, lógica y lluvia."""
     hechos = problema["hechos"]
     lluvia = "lluvia" in hechos and prenda["categoria"] == "abrigo" and not prenda["impermeable"]
+    deducidos = deducir_de_prenda(prenda, hechos)
     return (
         distancia_al_ideal(prenda, problema["ideal"])
-        + (0 if es_apta(prenda, hechos) else PENALIZACION_NO_APTA)
+        + (PENALIZACION_NO_APTA if "no_apta" in deducidos else 0)
+        + (PENALIZACION_OCASION if "fuera_de_ocasion" in deducidos else 0)
         + (PENALIZACION_LLUVIA if lluvia else 0)
     )
 
 
 def costo_prenda(atuendo: list[dict], prenda: dict, problema: dict) -> int:
-    """Costo g de agregar una prenda: su combinación más difícil con lo que ya está, más clima, lógica y lluvia."""
-    return max(costo_par(p, prenda) for p in atuendo) + costo_sin_color(prenda, problema)
+    """Costo g de agregar una prenda: su combinación más difícil con lo que ya está, más clima, lógica,
+    lluvia y estampados que se recargan."""
+    recargado = any(se_recargan(p, prenda) for p in atuendo)
+    return (max(costo_par(p, prenda) for p in atuendo) + costo_sin_color(prenda, problema)
+            + (PENALIZACION_ESTAMPADOS if recargado else 0))
 
 
 def combinan_todas(atuendo: list[dict], prenda: dict) -> bool:
@@ -182,10 +193,14 @@ def mejores_atuendos(problema: dict, cantidad: int) -> list[dict]:
 # ------------------------------------------------
 
 def elegir_accesorio(atuendo: list[dict], problema: dict) -> dict | None:
-    """El accesorio que combina con todo el atuendo y cuesta menos, si hay alguno."""
+    """El accesorio que combina con todo el atuendo, va con la ocasión y cuesta menos, si hay alguno.
+
+    Es opcional: si ninguno va con la ocasión, el atuendo queda mejor sin accesorio.
+    """
     if any(p["categoria"] == "accesorio" for p in atuendo):
         return None
-    opciones = [a for a in problema["accesorios"] if combinan_todas(atuendo, a)]
+    opciones = [a for a in problema["accesorios"]
+                if combinan_todas(atuendo, a) and es_apta(a, problema["hechos"])]
     return min(opciones, key=lambda a: (costo_prenda(atuendo, a, problema), a["id"]), default=None)
 
 
@@ -204,21 +219,25 @@ def crear_sugerencia(atuendo: list[dict], costo: int, hechos: set[str]) -> dict:
     return {"elementos": elementos, "costo": costo, "puntuacion": len(ventajas), "ventajas": ventajas}
 
 
-def recomendar(base: dict, armario: list[dict], hechos_clima: set[str], cantidad: int = 3) -> dict:
-    """Los `cantidad` atuendos más baratos según A*, cada uno con un accesorio si alguno combina."""
+def recomendar(base: dict, armario: list[dict], hechos_clima: set[str], cantidad: int = 3,
+               buscar=mejores_atuendos, con_accesorio: bool = True) -> dict:
+    """Los `cantidad` atuendos más baratos según A*, cada uno con un accesorio si alguno combina.
+
+    `buscar` puede ser otro algoritmo de algoritmos.py (BFS, DFS, UCS, Greedy o las heurísticas).
+    """
     problema = preparar_problema(base, armario, hechos_clima)
 
     sugerencias = []
-    for nodo in mejores_atuendos(problema, cantidad):
+    for nodo in buscar(problema, cantidad):
         if len(nodo["atuendo"]) == 1:
             continue  # nada combina con la base: la app muestra lo que falta en vez de la prenda sola
-        accesorio = elegir_accesorio(nodo["atuendo"], problema)
+        accesorio = elegir_accesorio(nodo["atuendo"], problema) if con_accesorio else None
         atuendo = nodo["atuendo"] + ([accesorio] if accesorio else [])
         sugerencias.append(crear_sugerencia(atuendo, nodo["g"], problema["hechos"]))
 
     avisos = []
     if not es_apta(base, problema["hechos"]):
-        avisos.append("La prenda base no es ideal para el clima de hoy")
+        avisos.append("La prenda base no es ideal para el clima o la ocasión de hoy")
     if "abrigo" in problema["faltantes"]:
         avisos.append("No tienes un abrigo que combine con tu prenda para este clima")
 
