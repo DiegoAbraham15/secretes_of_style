@@ -1,0 +1,20 @@
+# Motor del probador virtual. Necesita Python 3.11 (CatVTON fija torch 2.1.2) y una GPU NVIDIA.
+# Instalar desde backend\motor:
+#   uv venv --python 3.11 .venv
+#   uv pip install --python .venv\Scripts\python.exe -r requirements.txt
+--extra-index-url https://download.pytorch.org/whl/cu121
+torch==2.1.2+cu121
+torchvision==0.16.2+cu121
+numpy==1.26.4
+diffusers==0.29.2
+transformers==4.27.3
+accelerate==0.31.0
+huggingface_hub==0.23.4
+pillow==10.3.0
+scipy==1.13.1
+opencv-python-headless==4.10.0.84
+safetensors==0.8.0
+rembg==2.0.69
+onnxruntime==1.31.1
+fastapi>=0.115
+uvicorn>=0.30

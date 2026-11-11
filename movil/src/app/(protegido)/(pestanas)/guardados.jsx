@@ -6,6 +6,7 @@ import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native
 import { eliminarAtuendo, listarAtuendos, urlImagen } from '../../../api';
 import { ETIQUETA_CATEGORIA, ETIQUETA_COLOR, HEX_COLOR, nombreDePrenda, ORDEN_CUERPO } from '../../../catalogos';
 import { Encabezado } from '../../../componentes/Encabezado';
+import { Probador } from '../../../componentes/Probador';
 import { ICONO_CLIMA } from '../../../componentes/TarjetaClima';
 import { confirmar } from '../../../confirmar';
 import { IconoAbrir, IconoCerrar, IconoEliminar, IconoGuardados, IconoNublado } from '../../../iconos';
@@ -127,6 +128,8 @@ function Entrada({ atuendo, dia, primera, ultima, alEliminar, eliminando }) {
             <IconoAbrir color={colores.primario} size={14} weight="bold" />
           )}
         </Pressable>
+
+        <Probador sugerencia={atuendo} />
       </View>
     </View>
   );

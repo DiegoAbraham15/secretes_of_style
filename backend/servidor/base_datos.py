@@ -7,6 +7,8 @@ from pathlib import Path
 CARPETA_BACKEND = Path(__file__).resolve().parent.parent
 RUTA_BD = CARPETA_BACKEND / "secrets_of_style.db"
 CARPETA_ARCHIVOS = CARPETA_BACKEND / "archivos_subidos"
+# Fotos del cuerpo y resultados del probador. No se sirve como /archivos: solo se entrega con sesión.
+CARPETA_PRIVADA = CARPETA_BACKEND / "privado"
 
 TABLAS = """
 CREATE TABLE IF NOT EXISTS usuarios (
@@ -73,6 +75,21 @@ CREATE TABLE IF NOT EXISTS votos_atuendo (
     fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (usuario_id, firma)
 );
+CREATE TABLE IF NOT EXISTS pruebas_atuendo (
+    id INTEGER PRIMARY KEY,
+    usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    firma TEXT NOT NULL,
+    version_foto INTEGER NOT NULL,
+    estado TEXT NOT NULL DEFAULT 'en_cola',
+    paso INTEGER DEFAULT 0,
+    pasos INTEGER NOT NULL,
+    ruta TEXT,
+    segundos REAL,
+    error TEXT,
+    fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP,
+    fecha_uso TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (usuario_id, firma, version_foto)
+);
 CREATE TABLE IF NOT EXISTS climas (
     clave TEXT PRIMARY KEY,
     consultado REAL NOT NULL,
@@ -85,6 +102,8 @@ COLUMNAS_NUEVAS = [
     ("usuarios", "version_sesion", "INTEGER DEFAULT 0"),
     ("prendas", "estampado", "TEXT DEFAULT 'liso'"),
     ("prendas", "estilo", "TEXT DEFAULT 'casual'"),
+    ("perfiles", "foto_cuerpo", "TEXT"),
+    ("perfiles", "version_foto", "INTEGER DEFAULT 0"),
 ]
 
 

@@ -9,6 +9,7 @@ import {
   detectarEstiloPrenda,
   eliminarPrenda,
   obtenerPrenda,
+  revisarPrenda, // LIMPIEZA de datos
   urlImagen,
 } from '../../../api';
 import {
@@ -26,7 +27,7 @@ import {
 import { Boton } from '../../../componentes/Boton';
 import { Selector } from '../../../componentes/Selector';
 import { confirmar } from '../../../confirmar';
-import { IconoEliminar, IconoIA } from '../../../iconos';
+import { IconoAviso, IconoEliminar, IconoIA } from '../../../iconos';
 import { Aparecer, vibrar } from '../../../movimiento';
 import { crearEstilos, espacio, radio, useTema } from '../../../tema';
 
@@ -45,12 +46,20 @@ export default function PantallaPrenda() {
   const [cambiando, establecerCambiando] = useState(false);
   const [eliminando, establecerEliminando] = useState(false);
   const [detectando, establecerDetectando] = useState(false);
+  const [motivos, establecerMotivos] = useState([]); // LIMPIEZA de datos: por qué revisar esta prenda
 
   useEffect(() => {
     obtenerPrenda(id)
       .then(establecerPrenda)
       .catch((e) => establecerError(e.message));
   }, [id]);
+
+  // LIMPIEZA de datos: si falla, simplemente no se muestra el aviso.
+  useEffect(() => {
+    revisarPrenda(id)
+      .then((revision) => establecerMotivos(revision.motivos))
+      .catch(() => establecerMotivos([]));
+  }, [id, prenda?.color_principal]);
 
   async function cambiarEstado(estado) {
     if (estado === prenda.estado || cambiando) return;
@@ -147,6 +156,21 @@ export default function PantallaPrenda() {
         <Text style={[texto.detalle, { textAlign: 'center' }]}>{detalles.filter(Boolean).join(', ')}</Text>
       </Aparecer>
 
+      {/* LIMPIEZA de datos: aviso cuando los datos o la foto de la prenda conviene revisarlos */}
+      {motivos.length > 0 && (
+        <View style={estilos.aviso} accessibilityRole="alert">
+          <IconoAviso color={colores.primario} size={18} weight="bold" />
+          <View style={{ flex: 1, gap: espacio.xs }}>
+            <Text style={[texto.etiqueta, { color: colores.texto }]}>Revisa esta prenda</Text>
+            {motivos.map((motivo) => (
+              <Text key={motivo} style={texto.detalle}>
+                {motivo[0].toUpperCase() + motivo.slice(1)}.
+              </Text>
+            ))}
+          </View>
+        </View>
+      )}
+
       <Selector titulo="Estado" opciones={ESTADOS} seleccionado={prenda.estado} alCambiar={cambiarEstado} />
       <Text style={[texto.detalle, { marginTop: -espacio.s, marginBottom: espacio.xl }]}>
         {cambiando ? 'Guardando…' : EXPLICACION_ESTADO[prenda.estado]}
@@ -209,4 +233,14 @@ const useEstilos = crearEstilos(({ colores, texto }) => ({
   },
   nombre: { ...texto.titulo, textAlign: 'center', marginTop: espacio.m },
   error: { ...texto.detalle, color: colores.error, marginBottom: espacio.m },
+  // LIMPIEZA de datos
+  aviso: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: espacio.s + 4,
+    padding: espacio.m,
+    borderRadius: radio.m,
+    backgroundColor: colores.primarioSuave,
+    marginBottom: espacio.xl,
+  },
 }));

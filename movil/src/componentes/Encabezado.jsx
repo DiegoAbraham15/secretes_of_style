@@ -1,11 +1,12 @@
 // Cabecera de cada pestaña, como la de una revista: el título grande en Bodoni y, a la derecha, el avatar
-// de la cuenta (al tocarlo se puede cerrar sesión). Si se pasa children (p. ej. un buscador), va en la
-// fila de arriba junto a la acción y el avatar, y el título baja a su propia línea.
+// de la cuenta (al tocarlo se abre "Tu foto", donde está la foto del probador y cerrar sesión). Si se pasa
+// children (p. ej. un buscador), va en la fila de arriba junto a la acción y el avatar, y el título baja a
+// su propia línea.
 // accion: { icono, etiqueta, alPresionar } — el ícono va en un círculo rosa.
+import { router } from 'expo-router';
 import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { confirmar } from '../confirmar';
 import { Presionable } from '../movimiento';
 import { useSesion } from '../sesion';
 import { crearEstilos, espacio, fuentes, tamañoIcono, useTema } from '../tema';
@@ -15,16 +16,8 @@ const TAMAÑO_CIRCULO = 44;
 export function Encabezado({ titulo, children, accion }) {
   const { colores, texto } = useTema();
   const estilos = useEstilos();
-  const { correo, cerrarSesion } = useSesion();
+  const { correo } = useSesion();
   const { top } = useSafeAreaInsets();
-
-  const salir = () =>
-    confirmar(
-      'Cerrar sesión',
-      `${correo ? `Entraste como ${correo}. ` : ''}¿Quieres cerrar tu sesión? Se cerrará también en tus otros dispositivos.`,
-      'Salir',
-      cerrarSesion,
-    );
 
   const textoTitulo = titulo && (
     <Text style={[texto.titulo, children ? null : estilos.tituloEnFila]} accessibilityRole="header">
@@ -49,9 +42,9 @@ export function Encabezado({ titulo, children, accion }) {
         )}
 
         <Presionable
-          onPress={salir}
+          onPress={() => router.push('/tu-foto')}
           accessibilityRole="button"
-          accessibilityLabel="Tu cuenta: cerrar sesión"
+          accessibilityLabel="Tu foto y tu cuenta"
           escala={0.92}
           style={estilos.avatar}>
           <Text style={estilos.inicial}>{correo ? correo[0].toUpperCase() : ''}</Text>

@@ -10,7 +10,8 @@ Regla de aprendizaje, con y = +1 (le dio corazón) o -1 (se le mostró y no le d
 
 Parecido: el perceptrón necesita varios votos para generalizar, y los looks sin corazón suelen ser casi iguales
 al que gustó. Por eso también se mide la distancia manhattan de cada candidato al look con corazón más cercano,
-la misma idea del plano de estilo de la búsqueda. El puntaje final es el promedio de las dos señales.
+la misma idea del plano de estilo de la búsqueda. El puntaje final mezcla las dos señales: 90 % parecido y
+10 % perceptrón (PESO_PARECIDO). Sin corazones todavía no hay parecido y decide el perceptrón (con el cuestionario).
 
 Quién decide qué:
   La lógica dice qué es válido, A* propone los mejores y el perceptrón solo desempata entre candidatos
@@ -27,6 +28,10 @@ TASA = 0.25  # η: cuánto se mueven los pesos en cada corrección
 EPOCAS = 10  # veces que se repasan los votos al entrenar
 CANDIDATOS = 12  # atuendos que A* propone para elegir los que se muestran
 AJUSTE_MAXIMO = 1.25  # debe quedar por debajo de la mitad de PENALIZACION_NO_APTA (ver el docstring)
+# Cuánto pesa el parecido frente al perceptrón cuando ya hay looks con corazón. Medido el 2026-11-10 con la
+# evaluación de limpieza_de_datos/evaluacion_del_modelo.py (52 votos, 20 divisiones): con 0.5 los looks con
+# corazón quedaban arriba el 51 % de las veces (casi al azar), con 0.9 el 70 % y solo con el parecido el 72 %.
+PESO_PARECIDO = 0.9
 
 
 # Arranque en frío: lo que dice el cuestionario se vuelve el punto de partida del perceptrón, para que los
@@ -153,7 +158,7 @@ def reordenar(sugerencias: list[dict], pesos: dict[str, float], votos: dict[str,
     puntajes = escalar([puntuar(pesos, x) for x in caracteristicas])
     if gustados:
         parecidos = escalar([-min(distancia(x, gustado) for gustado in gustados) for x in caracteristicas])
-        puntajes = [(puntaje + parecido) / 2 for puntaje, parecido in zip(puntajes, parecidos)]
+        puntajes = [(1 - PESO_PARECIDO) * puntaje + PESO_PARECIDO * parecido for puntaje, parecido in zip(puntajes, parecidos)]
     for sugerencia, puntaje in zip(sugerencias, puntajes):
         voto = votos.get(firma_de([e["prenda"]["id"] for e in sugerencia["elementos"]]))
         sugerencia["voto"] = voto

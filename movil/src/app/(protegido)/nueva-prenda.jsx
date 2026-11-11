@@ -1,6 +1,4 @@
 import { Image } from 'expo-image';
-import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
-import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Switch, Text, View } from 'react-native';
@@ -20,20 +18,10 @@ import {
 import { Boton } from '../../componentes/Boton';
 import { Campo } from '../../componentes/Campo';
 import { Selector } from '../../componentes/Selector';
+import { elegirFoto } from '../../fotos';
 import { IconoCamara, IconoGaleria, IconoIA } from '../../iconos';
 import { Presionable, vibrar } from '../../movimiento';
 import { crearEstilos, espacio, fuentes, presionado, radio, tactil, tamañoIcono, useTema } from '../../tema';
-
-const ANCHO_MAXIMO_FOTO = 1200;
-
-// Reduce la foto antes de subirla: a 1200 px de ancho en JPEG pesa unos cientos de KB en vez de varios MB.
-async function reducirFoto(foto) {
-  const contexto = ImageManipulator.manipulate(foto.uri);
-  if (foto.width > ANCHO_MAXIMO_FOTO) contexto.resize({ width: ANCHO_MAXIMO_FOTO, height: null });
-  const imagen = await contexto.renderAsync();
-  const guardada = await imagen.saveAsync({ format: SaveFormat.JPEG, compress: 0.7 });
-  return guardada.uri;
-}
 
 // Botón de contorno con ícono para elegir el origen de la foto.
 function BotonFoto({ icono: Icono, texto: etiqueta, alPresionar }) {
@@ -92,30 +80,16 @@ export default function PantallaNuevaPrenda() {
   }
 
   async function elegirImagen(desdeCamara) {
-    const permiso = desdeCamara
-      ? await ImagePicker.requestCameraPermissionsAsync()
-      : await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permiso.granted) {
-      establecerError('Da permiso de fotos o cámara en los ajustes del teléfono para agregar la foto.');
-      return;
-    }
-
-    // Calidad 1: la compresión se hace una sola vez, al reducir la foto.
-    const opciones = { mediaTypes: ['images'], allowsEditing: true, aspect: [3, 4], quality: 1 };
-    const resultado = desdeCamara
-      ? await ImagePicker.launchCameraAsync(opciones)
-      : await ImagePicker.launchImageLibraryAsync(opciones);
-    if (resultado.canceled) return;
-
     let uri;
     try {
-      uri = await reducirFoto(resultado.assets[0]);
-      establecerImagen({ uri, nombre: 'prenda.jpg' });
-      establecerError(null);
-    } catch {
-      establecerError('No se pudo preparar la foto. Intenta con otra.');
+      uri = await elegirFoto(desdeCamara);
+    } catch (e) {
+      establecerError(e.message);
       return;
     }
+    if (!uri) return;
+    establecerImagen({ uri, nombre: 'prenda.jpg' });
+    establecerError(null);
     analizar(uri);
   }
 

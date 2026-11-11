@@ -4,6 +4,7 @@
 // etiqueta: aviso sobre las fotos (p. ej. "La mejor opción"). destacado: resalta la tarjeta.
 // alExplicar: botón "¿Por qué?"; explicacion ({ texto } o { error }) es lo que redactó la IA.
 // conCorazon y alCorazon: el corazón con el que la persona le enseña sus gustos a la app; errorVoto si no se guardó.
+// Al final va el probador virtual ("Probármelo"), que viste la foto de la persona con el look.
 import { Image } from 'expo-image';
 import { Pressable, Text, View } from 'react-native';
 
@@ -12,6 +13,7 @@ import { ETIQUETA_COLOR, HEX_COLOR, nombreDePrenda, ORDEN_CUERPO } from '../cata
 import { IconoCorazon, IconoGuardados, IconoIA, IconoPalomita, IconoVentaja } from '../iconos';
 import { crearEstilos, espacio, fuentes, presionado, radio, tactil, tamañoIcono, useTema } from '../tema';
 import { Boton } from './Boton';
+import { Probador } from './Probador';
 
 const nombreConColor = (prenda) => `${nombreDePrenda(prenda)} ${ETIQUETA_COLOR[prenda.color_principal].toLowerCase()}`;
 
@@ -158,6 +160,8 @@ export function Perchero({
             </View>
           )}
         </View>
+
+        <Probador sugerencia={sugerencia} />
       </View>
     </View>
   );

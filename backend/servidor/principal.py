@@ -7,12 +7,16 @@ Ejecutar desde la carpeta backend:
 import json
 import uuid
 from collections import Counter
+from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from servidor import probador
 from servidor.algoritmos import ALGORITMOS
 from servidor.aprendizaje import (ACCESORIOS, CANDIDATOS, PESOS_DE_RESPUESTA, RESPUESTA_POR_DEFECTO, caracteristicas_de,
                                   entrenar, firma_de, pesos_iniciales, reordenar)
@@ -20,6 +24,8 @@ from servidor.base_datos import CARPETA_ARCHIVOS, consultar, consultar_uno, crea
 from servidor.busqueda import recomendar
 from servidor.clima import obtener_clima
 from servidor.explicacion import explicar_atuendo
+from limpieza_de_datos.limpieza_de_datos import limpiar_votos  # LIMPIEZA de datos (carpeta limpieza_de_datos/)
+from limpieza_de_datos.rutas import rutas as rutas_limpieza  # LIMPIEZA de datos: votos, prendas y evaluación
 from servidor.logica import COLORES_NEUTROS, COLORES_VIVOS, ESTAMPADOS, ESTILOS, OCASIONES, hechos_de_ocasion
 from servidor.seguridad import crear_token, generar_hash, usuario_actual, verificar_contraseña
 from servidor.vision import detectar_prenda
@@ -39,7 +45,13 @@ ORIGENES_PERMITIDOS = (
 crear_tablas()
 CARPETA_ARCHIVOS.mkdir(exist_ok=True)
 
-aplicacion = FastAPI(title="Secrets of Style")
+@asynccontextmanager
+async def al_arrancar(_aplicacion):
+    probador.iniciar()  # el hilo que atiende la cola del probador virtual
+    yield
+
+
+aplicacion = FastAPI(title="Secrets of Style", lifespan=al_arrancar)
 aplicacion.add_middleware(
     CORSMiddleware,
     allow_origin_regex=ORIGENES_PERMITIDOS,
@@ -47,6 +59,7 @@ aplicacion.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 aplicacion.mount("/archivos", StaticFiles(directory=CARPETA_ARCHIVOS), name="archivos")
+aplicacion.include_router(rutas_limpieza)  # LIMPIEZA de datos: rutas de limpieza_de_datos/rutas.py
 
 
 # ============================================================
@@ -122,6 +135,7 @@ def leer_perfil(usuario_id: int) -> dict:
         ejecutar("INSERT INTO perfiles (usuario_id) VALUES (?)", (usuario_id,))
         return leer_perfil(usuario_id)
     perfil["parametros_corporales"] = json.loads(perfil["parametros_corporales"] or "null")
+    perfil["tiene_foto"] = perfil.pop("foto_cuerpo") is not None  # la ruta privada no sale del servidor
     return perfil
 
 
@@ -318,6 +332,7 @@ def eliminar_prenda(prenda_id: int, usuario: dict = Depends(usuario_actual)):
     prenda = buscar_prenda(prenda_id, usuario)
     ejecutar("DELETE FROM prendas WHERE id = ?", (prenda_id,))  # también la quita de los atuendos (cascada)
     borrar_imagen(prenda["url_imagen"])
+    probador.olvidar_prenda(usuario["id"], prenda_id)
 
 
 # ============================================================
@@ -349,13 +364,15 @@ def leer_preferencias(usuario_id: int) -> dict | None:
 
 
 def reentrenar(usuario_id: int) -> int:
-    """Vuelve a calcular los pesos con el cuestionario y todos los votos; devuelve cuántos votos son."""
+    """Vuelve a calcular los pesos con el cuestionario y los votos; devuelve cuántos votos son."""
     votos = leer_votos(usuario_id)
+    para_entrenar = votos
+    para_entrenar = limpiar_votos(votos)["validos"]  # LIMPIEZA de datos: sin esta línea entrena con todos
     iniciales = pesos_iniciales(leer_preferencias(usuario_id) or {})
     ejecutar(
         "INSERT INTO pesos_usuario (usuario_id, pesos) VALUES (?, ?) ON CONFLICT (usuario_id) "
         "DO UPDATE SET pesos = excluded.pesos, fecha_actualizacion = CURRENT_TIMESTAMP",
-        (usuario_id, json.dumps(entrenar(votos, iniciales))),
+        (usuario_id, json.dumps(entrenar(para_entrenar, iniciales))),
     )
     return len(votos)
 
@@ -542,6 +559,66 @@ def eliminar_atuendo(atuendo_id: int, usuario: dict = Depends(usuario_actual)):
     if not consultar_uno("SELECT id FROM atuendos WHERE id = ? AND usuario_id = ?", (atuendo_id, usuario["id"])):
         raise HTTPException(404, "Atuendo no encontrado")
     ejecutar("DELETE FROM atuendos WHERE id = ?", (atuendo_id,))
+
+
+# ============================================================
+# PROBADOR VIRTUAL (la IA corre en el motor: ver probador.py y backend/motor)
+# ============================================================
+
+@aplicacion.post("/api/perfil/foto")
+def subir_foto_cuerpo(imagen: UploadFile = File(...), usuario: dict = Depends(usuario_actual)):
+    """La foto con la que se prueban los looks. El motor revisa que sirva; queda en backend/privado.
+
+    Es def (no async) para que FastAPI la corra en otro hilo mientras el motor la revisa.
+    """
+    contenido = imagen.file.read(MAXIMO_IMAGEN_MB * 1024 * 1024 + 1)
+    extension = revisar_imagen(contenido)
+    if extension == ".heic":
+        raise HTTPException(415, "Manda la foto en JPG o PNG.")
+    leer_perfil(usuario["id"])  # crea el perfil si no existe
+    probador.guardar_foto(usuario["id"], contenido, extension)
+    return leer_perfil(usuario["id"])
+
+
+@aplicacion.get("/api/perfil/foto")
+def ver_foto_cuerpo(usuario: dict = Depends(usuario_actual)):
+    """La foto de la persona, solo para ella (pide la sesión). La app agrega ?v=version_foto para no ver una vieja."""
+    foto = probador.foto_de(usuario["id"]).get("foto_cuerpo")
+    if not foto or not Path(foto).is_file():
+        raise HTTPException(404, "Todavía no subes tu foto")
+    return FileResponse(foto, headers={"Cache-Control": "private, max-age=86400"})
+
+
+@aplicacion.delete("/api/perfil/foto")
+def borrar_foto_cuerpo(usuario: dict = Depends(usuario_actual)):
+    """Borra la foto y todas las imágenes generadas con ella."""
+    leer_perfil(usuario["id"])
+    probador.borrar_foto(usuario["id"])
+    return leer_perfil(usuario["id"])
+
+
+class SolicitudPrueba(BaseModel):
+    prenda_ids: list[int] = Field(min_length=1, max_length=6)
+
+
+@aplicacion.post("/api/atuendos/probador")
+def pedir_prueba(datos: SolicitudPrueba, usuario: dict = Depends(usuario_actual)):
+    """Pide ver un look puesto. Si ya se generó, responde "lista"; si no, queda en la cola."""
+    if len(set(datos.prenda_ids)) != len(datos.prenda_ids):
+        raise HTTPException(422, "Un atuendo no puede repetir prendas")
+    prendas = [buscar_prenda(prenda_id, usuario) for prenda_id in datos.prenda_ids]
+    return probador.pedir(usuario["id"], prendas)
+
+
+@aplicacion.get("/api/atuendos/probador/{prueba_id}")
+def consultar_prueba(prueba_id: int, usuario: dict = Depends(usuario_actual)):
+    return probador.consultar_estado(usuario["id"], prueba_id)
+
+
+@aplicacion.get("/api/atuendos/probador/{prueba_id}/imagen")
+def imagen_de_prueba(prueba_id: int, usuario: dict = Depends(usuario_actual)):
+    return FileResponse(probador.ruta_de_imagen(usuario["id"], prueba_id), media_type="image/jpeg",
+                        headers={"Cache-Control": "private, max-age=86400"})
 
 
 # ============================================================

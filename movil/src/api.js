@@ -36,7 +36,9 @@ async function peticion(ruta, opciones = {}) {
     const detalle = cuerpo?.detail;
     // Los errores de validación de FastAPI llegan como lista.
     const mensaje = Array.isArray(detalle) ? detalle.map((e) => e.msg).join('\n') : detalle;
-    throw new Error(mensaje ?? `Error del servidor (${respuesta.status})`);
+    const error = new Error(mensaje ?? `Error del servidor (${respuesta.status})`);
+    error.estado = respuesta.status; // p. ej. 409 del probador: falta la foto
+    throw error;
   }
   return cuerpo;
 }
@@ -114,6 +116,9 @@ export const detectarEstiloPrenda = (prendaId) =>
 
 export const eliminarPrenda = (prendaId) => peticion(`/api/prendas/${prendaId}`, { method: 'DELETE' });
 
+// LIMPIEZA de datos: por qué conviene revisar una prenda (foto muy chica, color que no coincide…).
+export const revisarPrenda = (prendaId) => peticion(`/api/prendas/${prendaId}/revision`);
+
 // ---------- Recomendaciones ----------
 
 // Los mejores atuendos con la prenda base, según el clima de esa ubicación y la ocasión.
@@ -150,6 +155,30 @@ export const guardarAtuendo = (sugerencia, reporteClima) =>
 export const listarAtuendos = () => peticion('/api/atuendos');
 
 export const eliminarAtuendo = (atuendoId) => peticion(`/api/atuendos/${atuendoId}`, { method: 'DELETE' });
+
+// ---------- Probador virtual ----------
+
+export const obtenerPerfil = () => peticion('/api/perfil');
+
+// La foto con la que se prueban los looks. El servidor revisa que sirva (rostro, torso y piernas).
+export async function subirFotoCuerpo(uriImagen) {
+  const formulario = await formularioConImagen(uriImagen, 'cuerpo.jpg');
+  return peticion('/api/perfil/foto', { method: 'POST', body: formulario });
+}
+
+export const borrarFotoCuerpo = () => peticion('/api/perfil/foto', { method: 'DELETE' });
+
+// Pide ver el look puesto: responde la prueba lista o en la cola.
+export const pedirPrueba = (sugerencia) =>
+  peticion('/api/atuendos/probador', enviar('POST', { prenda_ids: sugerencia.elementos.map((e) => e.prenda.id) }));
+
+export const consultarPrueba = (pruebaId) => peticion(`/api/atuendos/probador/${pruebaId}`);
+
+// Las imágenes del probador son privadas: se piden con la sesión, no como /archivos.
+export const imagenPrivada = (ruta) => ({ uri: urlImagen(ruta), headers: { Authorization: `Bearer ${token}` } });
+
+// La foto de la persona. La versión va en la URL para que, al cambiarla, el teléfono no enseñe la anterior.
+export const fotoCuerpo = (versionFoto) => imagenPrivada(`/api/perfil/foto?v=${versionFoto}`);
 
 // ---------- Estadísticas ----------
 

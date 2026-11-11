@@ -36,6 +36,7 @@ export default function LayoutProtegido() {
         <Stack.Screen name="(pestanas)" options={{ headerShown: false }} />
         <Stack.Screen name="nueva-prenda" options={{ ...modal, title: 'Nueva prenda' }} />
         <Stack.Screen name="prenda/[id]" options={{ ...modal, title: 'Tu prenda' }} />
+        <Stack.Screen name="tu-foto" options={{ ...modal, title: 'Tu foto' }} />
       </Stack.Protected>
     </Stack>
   );
