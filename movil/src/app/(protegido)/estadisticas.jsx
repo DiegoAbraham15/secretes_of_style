@@ -2,16 +2,16 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 
-import { obtenerEstadisticas, obtenerEvaluacionIA, obtenerGruposDelArmario } from '../../../api';
-import { ETIQUETA_CATEGORIA, ETIQUETA_COLOR, HEX_COLOR, NIVELES_ABRIGO, nombreConColor } from '../../../catalogos';
-import { Encabezado } from '../../../componentes/Encabezado';
-import { FotoPrenda } from '../../../componentes/FotoPrenda';
-import { GraficaBarras, GraficaColumnas, Indicadores, Resumen, Seccion } from '../../../componentes/Graficas';
-import { Selector } from '../../../componentes/Selector';
-import { GruposDeRopa, MapaArmario, NoEncajan } from '../../../componentes/GruposArmario'; // SEGMENTACIÓN Y PCA
-import { IconoGuardados, IconoImpermeable, IconoMeLoPuse, IconoValeLaPena } from '../../../iconos';
-import { Aparecer } from '../../../movimiento';
-import { crearEstilos, espacio, espacioBarra, presionado, radio, useTema } from '../../../tema';
+import { obtenerEstadisticas, obtenerEvaluacionIA, obtenerGruposDelArmario } from '../../api';
+import { ETIQUETA_CATEGORIA, ETIQUETA_COLOR, HEX_COLOR, NIVELES_ABRIGO, nombreConColor } from '../../catalogos';
+import { Encabezado } from '../../componentes/Encabezado';
+import { FotoPrenda } from '../../componentes/FotoPrenda';
+import { GraficaBarras, GraficaColumnas, Indicadores, Resumen, Seccion } from '../../componentes/Graficas';
+import { Selector } from '../../componentes/Selector';
+import { GruposDeRopa, MapaArmario, NoEncajan } from '../../componentes/GruposArmario'; // SEGMENTACIÓN Y PCA
+import { IconoGuardados, IconoImpermeable, IconoMeLoPuse, IconoValeLaPena } from '../../iconos';
+import { Aparecer } from '../../movimiento';
+import { crearEstilos, espacio, espacioBarra, presionado, radio, useTema } from '../../tema';
 
 const TITULO = 'Estadísticas';
 const COLORES_VISIBLES = 5; // los demás se abren con "Ver los N"
@@ -67,7 +67,7 @@ export default function PantallaEstadisticas() {
   if (error || !datos) {
     return (
       <View style={estilos.pantalla}>
-        <Encabezado titulo={TITULO} />
+        <Encabezado atras titulo={TITULO} />
         {error ? (
           <Text style={[texto.cuerpo, estilos.mensaje, { color: colores.error }]}>{error}</Text>
         ) : (
@@ -112,7 +112,7 @@ export default function PantallaEstadisticas() {
 
   return (
     <View style={estilos.pantalla}>
-      <Encabezado titulo={TITULO} />
+      <Encabezado atras titulo={TITULO} />
       <ScrollView style={estilos.pantalla} contentContainerStyle={estilos.contenido}>
         <Selector opciones={VISTAS} seleccionado={vista} alCambiar={establecerVista} enLinea estilo={estilos.vistas} />
 

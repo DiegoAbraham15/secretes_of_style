@@ -29,7 +29,7 @@ export function TiraLook({ prendas, titulo, ancho = 200, children }) {
 
 const useEstilos = crearEstilos(({ colores, tarjeta }) => ({
   tarjeta: { ...tarjeta, padding: espacio.s + 4, gap: espacio.s },
-  titulo: { fontFamily: fuentes.displayItalica, fontSize: 20, lineHeight: 26, color: colores.texto },
+  titulo: { fontFamily: fuentes.negrita, fontSize: 16, lineHeight: 22, color: colores.texto },
   fotos: { flexDirection: 'row', gap: 2, borderRadius: radio.m, overflow: 'hidden', backgroundColor: colores.borde },
   foto: { flex: 1, aspectRatio: 3 / 4, backgroundColor: colores.superficieSuave },
 }));

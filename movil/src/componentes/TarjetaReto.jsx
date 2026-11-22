@@ -134,11 +134,11 @@ export function TarjetaReto({ reto, alCambiar }) {
 }
 
 const useEstilos = crearEstilos(({ colores, tarjeta }) => ({
-  tarjeta: { ...tarjeta, marginHorizontal: espacio.m, marginTop: espacio.m, padding: espacio.m, gap: espacio.s + 4 },
+  tarjeta: { ...tarjeta, padding: espacio.m, gap: espacio.s + 4 },
   cumplido: { backgroundColor: colores.superficieSuave },
   fila: { flexDirection: 'row', alignItems: 'center', gap: espacio.s },
   foto: { width: 64, aspectRatio: 3 / 4, borderRadius: radio.m, backgroundColor: colores.superficieSuave },
-  titulo: { fontFamily: fuentes.displayItalica, fontSize: 22, lineHeight: 28, color: colores.texto },
+  titulo: { fontFamily: fuentes.negrita, fontSize: 17, lineHeight: 23, color: colores.texto },
   acciones: { gap: 2 },
   accion: { flexDirection: 'row', alignItems: 'center', gap: espacio.xs + 2, minHeight: 32 },
   textoAccion: { fontFamily: fuentes.media, fontSize: 14, color: colores.primario },

@@ -46,3 +46,6 @@ export { TShirtIcon as IconoProbar } from 'phosphor-react-native/src/icons/TShir
 export { TrashIcon as IconoEliminar } from 'phosphor-react-native/src/icons/Trash';
 export { WarningIcon as IconoAviso } from 'phosphor-react-native/src/icons/Warning';
 export { XIcon as IconoLimpiar } from 'phosphor-react-native/src/icons/X';
+export { CaretLeftIcon as IconoAtras } from 'phosphor-react-native/src/icons/CaretLeft';
+export { HouseIcon as IconoInicio } from 'phosphor-react-native/src/icons/House';
+export { UserCircleIcon as IconoPerfil } from 'phosphor-react-native/src/icons/UserCircle';

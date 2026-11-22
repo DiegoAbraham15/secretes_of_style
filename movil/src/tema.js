@@ -1,73 +1,83 @@
-// Sistema de diseño de Secrets of Style: "Lookbook", como el catálogo de looks de una marca de moda
-// (sistema de diseño Lookbook). Papel blanco, tinta berenjena y un solo acento rosa; la
-// personalidad la pone la tipografía Bodoni de las revistas de moda. Ver design-system/secrets-of-style/MASTER.md.
-// Las pantallas usan solo estos tokens: nunca un color o tamaño suelto.
-import { StyleSheet, useColorScheme } from 'react-native';
+// Sistema de diseño de Secrets of Style: neutro y para todo público. Fondo gris muy claro, tarjetas blancas
+// con sombra suave, texto grafito y un solo acento de marca (frambuesa) para lo principal y lo activo.
+// Ver design-system/secrets-of-style/MASTER.md. Las pantallas usan solo estos tokens: nunca un color o tamaño suelto.
+import { Platform, StyleSheet, useColorScheme } from 'react-native';
 
 // Contrastes medidos (WCAG, fórmula de luminancia relativa):
-//   claro:  texto 18.2:1, textoSecundario 5.7:1 (5.1:1 sobre superficieSuave), primario 6.0:1 (y blanco
-//           encima 6.0:1; 5.0:1 sobre el rubor), error 6.5:1, bordeControl 3.7:1.
-//   oscuro: texto 17.2:1, textoSecundario 7.5:1, primario 7.2:1 (y 7.9:1 con texto negro encima),
-//           error 6.9:1, barra clara con ícono oscuro 17.2:1.
+//   claro:  texto 15.6:1 sobre el fondo, textoSecundario 6.1:1, primario 5.4:1 (blanco encima 5.8:1; 4.9:1
+//           sobre primarioSuave), éxito 4.9:1, error 6.0:1, aviso 5.4:1, info 5.8:1, bordeControl 3.2:1.
+//   oscuro: texto 16.7:1, textoSecundario 8.0:1, primario 8.0:1 (texto oscuro encima 9.0:1), éxito 10.1:1,
+//           error 7.6:1, aviso 11.9:1, info 8.9:1, bordeControl 4.4:1.
 const paletas = {
   claro: {
-    fondo: '#FFFFFF', // papel
+    fondo: '#F5F5F7',
     superficie: '#FFFFFF',
-    superficieSuave: '#F6F2F6', // fondo de fotos mientras cargan y de los campos
-    primarioSuave: '#FBE4EE', // rubor: lo seleccionado y los avisos
-    texto: '#1A1220', // tinta berenjena
-    textoSecundario: '#6B6470',
-    primario: '#BE185D', // el único acento: acciones y lo activo
+    superficieSuave: '#EFEFF3', // fotos mientras cargan, campos y bloques secundarios
+    primarioSuave: '#F7E7ED', // lo seleccionado, burbujas de íconos y avisos de marca
+    texto: '#1E1B22',
+    textoSecundario: '#5F5A66',
+    primario: '#B4345F', // acento de marca: acción principal, pestaña activa, enlaces
     sobrePrimario: '#FFFFFF',
-    secundario: '#EC4899', // barras que no son el dato destacado
-    acento: '#D97706', // estrellas de las ventajas; solo como ícono, nunca como texto
-    sobreAcento: '#000000',
-    tinta: '#1A1220', // la barra de pestañas flotante
-    sobreTinta: '#FFFFFF',
-    activoSobreTinta: '#F9A8D4', // pestaña activa sobre la tinta (10.1:1)
-    inactivoSobreTinta: '#BDB4C2', // pestañas inactivas sobre la tinta (9.1:1)
-    borde: '#E9E3EA', // líneas finas que separan
-    bordeControl: '#8A8290',
-    error: '#B91C1C',
-    exito: '#15803D', // punto y texto de "Disponible" (5.0:1; 4.5:1 sobre superficieSuave)
-    sombra: '#1A1220',
-    // Grupos de ropa (K-means) en Estadísticas: un color fijo por número de grupo, máximo 4. Validados entre
-    // todos los pares, también con daltonismo; el número va siempre dentro del punto, con su color de texto.
-    grupos: ['#BE185D', '#2A78D6', '#1BAF7A', '#EDA100'],
-    sobreGrupos: ['#FFFFFF', '#FFFFFF', '#1A1220', '#1A1220'],
+    secundario: '#D9A7B9', // barras que no son el dato destacado
+    acento: '#B7791F', // estrellas de ventajas y avisos (como ícono)
+    sobreAcento: '#FFFFFF',
+    tinta: '#FFFFFF', // barra de pestañas flotante
+    sobreTinta: '#1E1B22',
+    activoSobreTinta: '#B4345F',
+    inactivoSobreTinta: '#5F5A66',
+    borde: '#E4E3E8',
+    bordeControl: '#8B8792',
+    error: '#B42318',
+    errorSuave: '#FDECEA',
+    exito: '#1F7A4D',
+    exitoSuave: '#E6F4EC',
+    aviso: '#8A5A00',
+    avisoSuave: '#FDF3DC',
+    info: '#2F5FA8',
+    infoSuave: '#E8EFFA',
+    sombra: '#1E1B22',
+    grupos: ['#B4345F', '#2A78D6', '#1BAF7A', '#EDA100'],
+    sobreGrupos: ['#FFFFFF', '#FFFFFF', '#1E1B22', '#1E1B22'],
   },
   oscuro: {
-    fondo: '#120D16',
-    superficie: '#1B1520',
-    superficieSuave: '#241C2A',
-    primarioSuave: '#3B1630',
-    texto: '#F6F1F7',
-    textoSecundario: '#A79FAE',
-    primario: '#F472B6',
-    sobrePrimario: '#000000',
-    secundario: '#DB2777',
-    acento: '#F59E0B',
-    sobreAcento: '#000000',
-    tinta: '#F6F1F7', // en oscuro la barra es clara para que flote igual
-    sobreTinta: '#120D16',
-    activoSobreTinta: '#BE185D', // 5.4:1 sobre la barra clara
-    inactivoSobreTinta: '#5E5763', // 6.2:1
-    borde: 'rgba(255,255,255,0.09)',
-    bordeControl: '#7A7180',
-    error: '#F87171',
-    exito: '#4ADE80', // 9.4:1 sobre superficieSuave
+    fondo: '#121115',
+    superficie: '#1C1B20',
+    superficieSuave: '#26252B',
+    primarioSuave: '#3A2430',
+    texto: '#F2F1F4',
+    textoSecundario: '#ABA7B1',
+    primario: '#F08AAE',
+    sobrePrimario: '#121115',
+    secundario: '#7A4A5C',
+    acento: '#F2C94C',
+    sobreAcento: '#121115',
+    tinta: '#1C1B20',
+    sobreTinta: '#F2F1F4',
+    activoSobreTinta: '#F08AAE',
+    inactivoSobreTinta: '#ABA7B1',
+    borde: 'rgba(255,255,255,0.10)',
+    bordeControl: '#7C7883',
+    error: '#F7837A',
+    errorSuave: '#3A1F1D',
+    exito: '#5FD39B',
+    exitoSuave: '#1A3326',
+    aviso: '#F2C94C',
+    avisoSuave: '#3A3020',
+    info: '#8DB4F2',
+    infoSuave: '#1E2A3D',
     sombra: '#000000',
-    grupos: ['#DB2777', '#3987E5', '#1BAF7A', '#C98500'], // los mismos tonos, ajustados al fondo oscuro
-    sobreGrupos: ['#FFFFFF', '#120D16', '#120D16', '#120D16'],
+    grupos: ['#DB2777', '#3987E5', '#1BAF7A', '#C98500'],
+    sobreGrupos: ['#FFFFFF', '#121115', '#121115', '#121115'],
   },
 };
 
-// Dos familias que se distinguen a primera vista: Bodoni Moda (serif de alto contraste de las revistas
-// de moda) para la marca, los títulos y los números de los looks; Outfit (geométrica) para la interfaz.
+// Outfit (geométrica y legible) para toda la interfaz; Bodoni Moda solo para el logotipo.
 export const fuentes = {
-  display: 'BodoniModa_600SemiBold',
-  displayNegra: 'BodoniModa_800ExtraBold',
-  displayItalica: 'BodoniModa_500Medium_Italic',
+  marca: 'BodoniModa_800ExtraBold',
+  marcaItalica: 'BodoniModa_500Medium_Italic',
+  display: 'Outfit_700Bold',
+  displayNegra: 'Outfit_700Bold',
+  displayItalica: 'Outfit_500Medium',
   regular: 'Outfit_400Regular',
   media: 'Outfit_500Medium',
   negrita: 'Outfit_700Bold',
@@ -76,26 +86,34 @@ export const fuentes = {
 // Ritmo de 4/8: componentes 8–16, secciones 24–32, bloques grandes 48.
 export const espacio = { xs: 4, s: 8, m: 16, l: 24, xl: 32, xxl: 48 };
 
-// El radio sigue la jerarquía: fotos casi rectas como en un catálogo (4), controles (12),
-// contenedores (16), hojas que se deslizan (24) y pastillas para chips, botones y la barra.
-export const radio = { s: 4, m: 12, l: 16, xl: 24, pastilla: 999 };
+// Radios: fotos (12), controles (14), tarjetas (20), hojas (24) y pastillas.
+export const radio = { s: 12, m: 14, l: 20, xl: 24, pastilla: 999 };
 
 export const tamañoIcono = { s: 18, m: 24, l: 32 };
 
 // Área táctil mínima (44 pt en iOS, 48 dp en Android): se usa 48 en ambos.
 export const tactil = 48;
 
-// La barra de pestañas flota sobre el contenido: las listas dejan este espacio al final para que
-// no tape lo último (alto de la barra + su separación del borde + la zona del indicador de inicio).
-export const altoBarra = 64;
+// La barra de pestañas flota sobre el contenido: las listas dejan este espacio al final.
+export const altoBarra = 68;
 export const espacioBarra = altoBarra + 56;
 
-// Duraciones: el toque responde en 150 ms; lo que entra, en 220–400 ms; la salida es más corta que la entrada.
-// escalonado: retraso entre elementos de una lista que aparecen en cascada.
 export const duracion = { rapida: 150, normal: 220, lenta: 400, escalonado: 40 };
 
-// Opacidad al presionar (cuando no se anima la escala, p. ej. con "Reducir movimiento").
 export const presionado = { opacity: 0.75 };
+
+// Sombra suave de las tarjetas (iOS/web con shadow*, Android con elevation).
+function elevacion(colores, oscuro, nivel = 1) {
+  return Platform.select({
+    android: { elevation: nivel * 2 },
+    default: {
+      shadowColor: colores.sombra,
+      shadowOpacity: oscuro ? 0.4 : 0.07 * nivel,
+      shadowRadius: 8 * nivel + 4,
+      shadowOffset: { width: 0, height: 2 * nivel + 2 },
+    },
+  });
+}
 
 function crearTema(nombre) {
   const colores = paletas[nombre];
@@ -104,28 +122,33 @@ function crearTema(nombre) {
     nombre,
     oscuro,
     colores,
-    // Escala tipográfica clásica (12, 14, 16, 20, 24, 36, 48): los saltos grandes los hace Bodoni.
     texto: {
-      marca: { fontFamily: fuentes.displayNegra, fontSize: 52, lineHeight: 54, letterSpacing: -1, color: colores.texto },
-      titulo: { fontFamily: fuentes.display, fontSize: 34, lineHeight: 40, letterSpacing: -0.5, color: colores.texto },
-      subtitulo: { fontFamily: fuentes.display, fontSize: 24, lineHeight: 30, color: colores.texto },
+      marca: { fontFamily: fuentes.marca, fontSize: 44, lineHeight: 48, letterSpacing: -0.5, color: colores.texto },
+      titulo: { fontFamily: fuentes.negrita, fontSize: 24, lineHeight: 30, letterSpacing: -0.3, color: colores.texto },
+      subtitulo: { fontFamily: fuentes.negrita, fontSize: 18, lineHeight: 24, color: colores.texto },
       cuerpo: { fontFamily: fuentes.regular, fontSize: 16, lineHeight: 24, color: colores.texto },
       cuerpoFuerte: { fontFamily: fuentes.media, fontSize: 16, lineHeight: 24, color: colores.texto },
       etiqueta: { fontFamily: fuentes.media, fontSize: 14, lineHeight: 20, color: colores.texto },
       detalle: { fontFamily: fuentes.regular, fontSize: 14, lineHeight: 20, color: colores.textoSecundario },
       nota: { fontFamily: fuentes.regular, fontSize: 13, lineHeight: 18, color: colores.textoSecundario },
-      // Rótulo de un grupo (p. ej. "Estampado"): en minúsculas y sin espaciado, solo cuando hace falta nombrar algo.
       antetitulo: { fontFamily: fuentes.media, fontSize: 14, lineHeight: 20, color: colores.textoSecundario },
     },
-    // Bloque suave donde van las filas (Armario, Estadísticas) y la línea fina que separa una fila de otra.
-    bloque: { paddingHorizontal: espacio.m, paddingVertical: espacio.xs, borderRadius: radio.l, backgroundColor: colores.superficieSuave },
+    elevacion: (nivel) => elevacion(colores, oscuro, nivel),
+    // Bloque donde van filas (Armario, Estadísticas): tarjeta blanca con sombra suave.
+    bloque: {
+      paddingHorizontal: espacio.m,
+      paddingVertical: espacio.xs,
+      borderRadius: radio.l,
+      backgroundColor: colores.superficie,
+      ...elevacion(colores, oscuro, 1),
+    },
     separador: { borderBottomWidth: 1, borderBottomColor: colores.borde },
-    // Contenedor: una línea fina en lugar de sombra; la jerarquía la marcan el tamaño y la tipografía.
     tarjeta: {
       backgroundColor: colores.superficie,
       borderRadius: radio.l,
-      borderWidth: 1,
+      borderWidth: oscuro ? 1 : 0,
       borderColor: colores.borde,
+      ...elevacion(colores, oscuro, 1),
     },
   };
 }
@@ -138,7 +161,6 @@ export function useTema() {
 }
 
 // Estilos de un componente que dependen del tema: se crean una sola vez por tema y se reutilizan.
-// Uso: const useEstilos = crearEstilos(({ colores, texto }) => ({ ... })); y en el componente useEstilos().
 export function crearEstilos(fabrica) {
   const porTema = {};
   return function useEstilos() {

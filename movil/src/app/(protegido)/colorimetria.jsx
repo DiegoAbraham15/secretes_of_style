@@ -220,7 +220,7 @@ const useEstilos = crearEstilos(({ colores, tarjeta }) => ({
   pantalla: { flex: 1, backgroundColor: colores.fondo },
   contenido: { padding: espacio.m, gap: espacio.l, paddingBottom: espacio.xxl },
   resultado: { ...tarjeta, padding: espacio.m, gap: espacio.s + 4 },
-  estacion: { fontFamily: fuentes.displayItalica, fontSize: 40, lineHeight: 48, color: colores.texto },
+  estacion: { fontFamily: fuentes.negrita, fontSize: 28, lineHeight: 34, color: colores.texto },
   circulos: { flexDirection: 'row', flexWrap: 'wrap', gap: espacio.s },
   circulo: { borderWidth: 1, borderColor: colores.borde },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: espacio.s },

@@ -91,7 +91,7 @@ const useEstilos = crearEstilos(({ colores }) => ({
     justifyContent: 'center',
   },
   descripcion: { fontFamily: fuentes.negrita, fontSize: 15, lineHeight: 20, color: colores.texto },
-  temperatura: { fontFamily: fuentes.display, fontSize: 40, lineHeight: 48, color: colores.texto },
+  temperatura: { fontFamily: fuentes.negrita, fontSize: 36, lineHeight: 42, color: colores.texto },
   // Los consejos van debajo de una línea fina, cada uno con su punto.
   consejos: { marginTop: espacio.s + 4, paddingTop: espacio.s + 4, borderTopWidth: 1, borderTopColor: colores.borde, gap: espacio.xs },
   consejo: { flexDirection: 'row', alignItems: 'center', gap: espacio.s },

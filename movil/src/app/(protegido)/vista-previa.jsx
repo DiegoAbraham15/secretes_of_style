@@ -93,5 +93,5 @@ const useEstilos = crearEstilos(({ colores }) => ({
     overflow: 'hidden',
   },
   etiquetaParecida: { color: colores.texto, backgroundColor: colores.superficieSuave },
-  titulo: { fontFamily: fuentes.displayItalica, fontSize: 26, lineHeight: 32, color: colores.texto },
+  titulo: { fontFamily: fuentes.negrita, fontSize: 20, lineHeight: 26, color: colores.texto },
 }));

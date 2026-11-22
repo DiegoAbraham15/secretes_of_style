@@ -240,9 +240,9 @@ export function GraficaColumnas({ datos, unidad, repeticion, inicio, fin }) {
 const useEstilos = crearEstilos(({ colores, texto, bloque, separador }) => ({
   resumen: { padding: espacio.m, borderRadius: radio.l, backgroundColor: colores.primarioSuave, gap: espacio.s },
   filaTotal: { flexDirection: 'row', alignItems: 'flex-end', gap: espacio.s + 4 },
-  numeroTotal: { fontFamily: fuentes.display, fontSize: 88, lineHeight: 96, letterSpacing: -3, color: colores.primario },
+  numeroTotal: { fontFamily: fuentes.negrita, fontSize: 56, lineHeight: 62, letterSpacing: -1, color: colores.primario },
   textoTotal: { ...texto.cuerpo, flex: 1, paddingBottom: espacio.m },
-  hallazgo: { fontFamily: fuentes.displayItalica, fontSize: 20, lineHeight: 28, color: colores.texto },
+  hallazgo: { fontFamily: fuentes.media, fontSize: 17, lineHeight: 24, color: colores.texto },
 
   bloque, // bloque suave donde van las filas, igual que en el Armario (tema.js)
   seccion: { gap: espacio.s + 4 },
@@ -260,7 +260,7 @@ const useEstilos = crearEstilos(({ colores, texto, bloque, separador }) => ({
   },
   datosIndicador: { flex: 1, minWidth: 0 },
   tituloIndicador: { fontFamily: fuentes.negrita, fontSize: 15, lineHeight: 20, color: colores.texto },
-  valorIndicador: { fontFamily: fuentes.display, fontSize: 28, lineHeight: 34, color: colores.texto },
+  valorIndicador: { fontFamily: fuentes.negrita, fontSize: 24, lineHeight: 30, color: colores.texto },
 
   filaBarra: { minHeight: tactil, justifyContent: 'center', paddingVertical: espacio.s },
   encabezadoBarra: { flexDirection: 'row', alignItems: 'center', gap: espacio.s, marginBottom: 6 },

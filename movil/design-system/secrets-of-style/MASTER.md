@@ -1,6 +1,18 @@
 # Design System Master File
 
-> **Rediseño "Lookbook" (2026-10-29) — manda sobre lo de abajo:**
+> **Rediseño 2026-11-22 (manda sobre todo lo de abajo): neutro y para todo público.**
+> - Color: fondo `#F5F5F7`, tarjetas blancas con sombra suave (sin bordes en claro), texto grafito `#1E1B22`,
+>   secundario `#5F5A66`. Un solo acento de marca, frambuesa `#B4345F`, solo para la acción principal, la
+>   pestaña activa, enlaces y burbujas de íconos (fondo `#F7E7ED`). Semánticos con fondo suave: éxito, aviso,
+>   error e info. Oscuro: fondo `#121115`, acento `#F08AAE`. Todos los pares pasan WCAG AA (ver `src/tema.js`).
+> - Tipografía: Outfit para toda la interfaz (títulos 24/18 en negrita); Bodoni Moda solo en el logotipo.
+> - Forma: tarjetas de radio 20, controles 14, fotos 12; botones en pastilla. Primario sólido con sombra,
+>   secundario blanco con borde gris, peligro en rojo con fondo suave.
+> - Navegación: Inicio · Armario · (+ agregar prenda) · Guardados · Perfil, en una barra blanca flotante.
+>   Atuendos, Tiendas y Estadísticas se abren desde Inicio o Perfil con flecha de regreso.
+> - Armario en cuadrícula de 3 columnas con el estado como píldora; accesos en burbujas en Inicio.
+
+> **Rediseño "Lookbook" (2026-10-29), reemplazado por el de arriba:**
 > - Tipografía: **Bodoni Moda** (600, 800 y 500 cursiva) para la marca, títulos, "Look N", números de pasos
 >   y cifras; **Outfit** (400/500/700) para la interfaz. Sin MAYÚSCULAS en etiquetas ni "·" en metadatos.
 > - Color: papel `#FFFFFF`, tinta `#1A1220`, un solo acento rosa `#BE185D`, rubor `#FBE4EE`, líneas `#E9E3EA`.

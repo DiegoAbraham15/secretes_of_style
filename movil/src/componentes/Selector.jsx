@@ -60,7 +60,7 @@ const useEstilos = crearEstilos(({ colores, texto }) => ({
     borderColor: colores.borde,
     backgroundColor: colores.superficie,
   },
-  pastillaActiva: { backgroundColor: colores.texto, borderColor: colores.texto },
+  pastillaActiva: { backgroundColor: colores.primario, borderColor: colores.primario },
   muestra: {
     width: 14,
     height: 14,
@@ -70,5 +70,5 @@ const useEstilos = crearEstilos(({ colores, texto }) => ({
     borderColor: colores.bordeControl,
   },
   etiqueta: { fontFamily: fuentes.media, fontSize: 14, color: colores.texto },
-  etiquetaActiva: { color: colores.fondo },
+  etiquetaActiva: { color: colores.sobrePrimario, fontFamily: fuentes.negrita },
 }));

@@ -19,7 +19,7 @@ export function Boton({
   const estilos = useEstilos();
   const inactivo = deshabilitado || cargando;
   const contorno = secundario || peligro;
-  const color = peligro ? colores.error : contorno ? colores.primario : colores.sobrePrimario;
+  const color = peligro ? colores.error : contorno ? colores.texto : colores.sobrePrimario;
 
   return (
     <Presionable
@@ -31,7 +31,7 @@ export function Boton({
       style={[
         estilos.boton,
         contorno && estilos.contorno,
-        peligro && { borderColor: colores.error },
+        peligro && { borderColor: colores.error, backgroundColor: colores.errorSuave },
         deshabilitado && !cargando && estilos.deshabilitado,
       ]}>
       {cargando ? (
@@ -46,7 +46,7 @@ export function Boton({
   );
 }
 
-const useEstilos = crearEstilos(({ colores }) => ({
+const useEstilos = crearEstilos(({ colores, elevacion }) => ({
   boton: {
     minHeight: 52,
     borderRadius: radio.pastilla,
@@ -56,8 +56,9 @@ const useEstilos = crearEstilos(({ colores }) => ({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: espacio.l,
+    ...elevacion(1),
   },
-  contorno: { backgroundColor: colores.superficie, borderWidth: 1.5, borderColor: colores.primario },
+  contorno: { backgroundColor: colores.superficie, borderWidth: 1.5, borderColor: colores.borde, shadowOpacity: 0, elevation: 0 },
   deshabilitado: { opacity: 0.45 },
   texto: { fontFamily: fuentes.negrita, fontSize: 16 },
 }));

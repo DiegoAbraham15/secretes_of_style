@@ -233,7 +233,7 @@ const useEstilos = crearEstilos(({ colores, texto, tarjeta }) => ({
   corazonActivo: { backgroundColor: colores.primarioSuave },
   insignia: { flexDirection: 'row', alignItems: 'center', gap: espacio.xs + 2, marginTop: 2 },
   puntoInsignia: { width: 8, height: 8, borderRadius: 4 },
-  look: { fontFamily: fuentes.displayItalica, fontSize: 32, lineHeight: 40, color: colores.texto },
+  look: { fontFamily: fuentes.negrita, fontSize: 20, lineHeight: 26, color: colores.texto },
 
   prendas: { gap: espacio.s + 4 },
   fila: { flexDirection: 'row', alignItems: 'flex-start', gap: espacio.s + 2 },

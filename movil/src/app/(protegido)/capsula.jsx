@@ -260,7 +260,7 @@ const useEstilos = crearEstilos(({ colores, tarjeta }) => ({
   enlace: { fontFamily: fuentes.media, fontSize: 14, color: colores.primario },
   opcion: { flexDirection: 'row', alignItems: 'center', gap: espacio.s, minHeight: 44, paddingHorizontal: espacio.s },
   resumen: { flexDirection: 'row', alignItems: 'center', gap: espacio.m, padding: espacio.m, borderRadius: radio.l, backgroundColor: colores.primarioSuave },
-  cifra: { fontFamily: fuentes.displayNegra, fontSize: 48, lineHeight: 52, color: colores.primario },
+  cifra: { fontFamily: fuentes.negrita, fontSize: 40, lineHeight: 46, color: colores.primario },
   cuadricula: { flexDirection: 'row', flexWrap: 'wrap', gap: espacio.s },
   celda: { width: '31%', aspectRatio: 3 / 4, borderRadius: radio.m, backgroundColor: colores.superficieSuave },
   carrusel: { gap: espacio.s, paddingRight: espacio.m },

@@ -7,7 +7,7 @@ import { Campo } from '../componentes/Campo';
 import { IconoArmario, IconoCandado, IconoCorreo, IconoOcultar, IconoVer } from '../iconos';
 import { Aparecer } from '../movimiento';
 import { useSesion } from '../sesion';
-import { crearEstilos, espacio, fuentes, presionado, radio, tactil, tamañoIcono, useTema } from '../tema';
+import { crearEstilos, espacio, fuentes, presionado, tactil, tamañoIcono, useTema } from '../tema';
 
 export default function PantallaInicioSesion() {
   const { colores, texto } = useTema();
@@ -43,21 +43,20 @@ export default function PantallaInicioSesion() {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={estilos.pantalla}>
       <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" bounces={false}>
-        {/* Franja de color con la marca; la hoja blanca de abajo se monta sobre ella */}
-        <View style={[estilos.franja, { paddingTop: top + espacio.xl }]}>
+        <View style={[estilos.marca, { paddingTop: top + espacio.xxl }]}>
           <Aparecer>
             <View style={estilos.sello}>
               <IconoArmario color={colores.primario} size={tamañoIcono.l} weight="duotone" />
             </View>
-            <Text style={[texto.marca, { color: colores.sobrePrimario }]} accessibilityRole="header">
-              Secrets{'\n'}of Style
+            <Text style={[texto.marca, { textAlign: 'center' }]} accessibilityRole="header">
+              Secrets <Text style={estilos.marcaAcento}>of</Text> Style
             </Text>
-            <Text style={estilos.lema}>Tu armario sabe qué ponerte hoy.</Text>
+            <Text style={estilos.lema}>Tu armario digital, siempre contigo.</Text>
           </Aparecer>
         </View>
 
-        <View style={[estilos.hoja, { paddingBottom: bottom + espacio.l }]}>
-          <Aparecer indice={2}>
+        <View style={[estilos.zonaFormulario, { paddingBottom: bottom + espacio.l }]}>
+          <Aparecer indice={2} estilo={estilos.hoja}>
             <Text style={texto.titulo}>{esRegistro ? 'Crea tu cuenta' : 'Hola de nuevo'}</Text>
             <Text style={[texto.detalle, { marginTop: espacio.xs, marginBottom: espacio.l }]}>
               {esRegistro ? 'Solo necesitas un correo y una contraseña.' : 'Entra para ver tu armario y tus atuendos.'}
@@ -110,18 +109,20 @@ export default function PantallaInicioSesion() {
 
             <Boton texto={esRegistro ? 'Crear cuenta' : 'Entrar'} alPresionar={enviar} cargando={enviando} />
 
-            <Pressable
-              onPress={() => {
+            <View style={estilos.separador}>
+              <View style={estilos.linea} />
+              <Text style={texto.nota}>{esRegistro ? '¿Ya tienes cuenta?' : '¿Es tu primera vez?'}</Text>
+              <View style={estilos.linea} />
+            </View>
+
+            <Boton
+              texto={esRegistro ? 'Entrar con mi cuenta' : 'Crear cuenta'}
+              secundario
+              alPresionar={() => {
                 establecerEsRegistro(!esRegistro);
                 establecerError(null);
               }}
-              accessibilityRole="button"
-              style={({ pressed }) => [estilos.cambio, pressed && presionado]}>
-              <Text style={texto.detalle}>
-                {esRegistro ? '¿Ya tienes cuenta? ' : '¿Es tu primera vez? '}
-                <Text style={estilos.enlace}>{esRegistro ? 'Entra aquí' : 'Crea tu cuenta'}</Text>
-              </Text>
-            </Pressable>
+            />
           </Aparecer>
         </View>
       </ScrollView>
@@ -129,37 +130,25 @@ export default function PantallaInicioSesion() {
   );
 }
 
-const SOLAPE = radio.xl + 12; // lo que la hoja sube sobre la franja
-
-const useEstilos = crearEstilos(({ colores, texto }) => ({
-  pantalla: { flex: 1, backgroundColor: colores.primario },
-  franja: {
-    paddingHorizontal: espacio.l,
-    paddingBottom: SOLAPE + espacio.xl,
-    backgroundColor: colores.primario,
-  },
+const useEstilos = crearEstilos(({ colores, texto, tarjeta }) => ({
+  pantalla: { flex: 1, backgroundColor: colores.fondo },
+  marca: { alignItems: 'center', paddingHorizontal: espacio.l, paddingBottom: espacio.xl },
   sello: {
-    width: 64,
-    height: 64,
-    borderRadius: radio.xl,
-    backgroundColor: colores.superficie,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignSelf: 'center',
+    backgroundColor: colores.primarioSuave,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: espacio.l,
+    marginBottom: espacio.m,
   },
-  lema: { ...texto.cuerpo, color: colores.sobrePrimario, marginTop: espacio.s },
-  // Hoja blanca con esquinas superiores grandes que se sube sobre la franja.
-  hoja: {
-    flexGrow: 1,
-    marginTop: -SOLAPE,
-    paddingHorizontal: espacio.l,
-    paddingTop: espacio.xl,
-    backgroundColor: colores.superficie,
-    borderTopLeftRadius: SOLAPE,
-    borderTopRightRadius: SOLAPE,
-  },
+  marcaAcento: { fontFamily: fuentes.marcaItalica, color: colores.primario },
+  lema: { ...texto.detalle, textAlign: 'center', marginTop: espacio.s },
+  zonaFormulario: { flexGrow: 1, paddingHorizontal: espacio.m, alignItems: 'center' },
+  hoja: { ...tarjeta, width: '100%', maxWidth: 440, padding: espacio.l },
   botonVer: { width: tactil, height: tactil, alignItems: 'center', justifyContent: 'center', marginRight: -espacio.s },
   error: { ...texto.detalle, color: colores.error, marginBottom: espacio.m },
-  cambio: { alignItems: 'center', justifyContent: 'center', minHeight: tactil, marginTop: espacio.m },
-  enlace: { fontFamily: fuentes.negrita, color: colores.primario },
+  separador: { flexDirection: 'row', alignItems: 'center', gap: espacio.s, marginVertical: espacio.m },
+  linea: { flex: 1, height: 1, backgroundColor: colores.borde },
 }));

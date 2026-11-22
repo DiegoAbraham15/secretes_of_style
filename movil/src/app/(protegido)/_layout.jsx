@@ -12,7 +12,7 @@ export default function LayoutProtegido() {
   const modal = {
     presentation: 'modal',
     headerTintColor: colores.primario,
-    headerTitleStyle: { fontFamily: fuentes.display, fontSize: 22, color: colores.texto },
+    headerTitleStyle: { fontFamily: fuentes.negrita, fontSize: 18, color: colores.texto },
     headerStyle: { backgroundColor: colores.fondo },
     headerShadowVisible: false,
     contentStyle: { backgroundColor: colores.fondo },
@@ -34,6 +34,9 @@ export default function LayoutProtegido() {
       </Stack.Protected>
       <Stack.Protected guard={cuestionarioListo}>
         <Stack.Screen name="(pestanas)" options={{ headerShown: false }} />
+        <Stack.Screen name="generador" options={{ headerShown: false }} />
+        <Stack.Screen name="tiendas" options={{ headerShown: false }} />
+        <Stack.Screen name="estadisticas" options={{ headerShown: false }} />
         <Stack.Screen name="nueva-prenda" options={{ ...modal, title: 'Nueva prenda' }} />
         <Stack.Screen name="carga-masiva" options={{ ...modal, title: 'Varias prendas' }} />
         <Stack.Screen name="importar" options={{ ...modal, title: 'Desde un link' }} />

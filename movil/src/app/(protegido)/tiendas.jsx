@@ -13,16 +13,16 @@ import {
   cambiarDeseo,
   eliminarDeseo,
   listarDeseos,
-} from '../../../api';
-import { Boton } from '../../../componentes/Boton';
-import { Encabezado } from '../../../componentes/Encabezado';
-import { Selector } from '../../../componentes/Selector';
-import { TarjetaDeseo } from '../../../componentes/TarjetaDeseo';
-import { confirmar } from '../../../confirmar';
-import { elegirFoto } from '../../../fotos';
-import { IconoAviso, IconoCamara, IconoGaleria, IconoIA } from '../../../iconos';
-import { Aparecer, vibrar } from '../../../movimiento';
-import { crearEstilos, espacio, espacioBarra, radio, tamañoIcono, useTema } from '../../../tema';
+} from '../../api';
+import { Boton } from '../../componentes/Boton';
+import { Encabezado } from '../../componentes/Encabezado';
+import { Selector } from '../../componentes/Selector';
+import { TarjetaDeseo } from '../../componentes/TarjetaDeseo';
+import { confirmar } from '../../confirmar';
+import { elegirFoto } from '../../fotos';
+import { IconoAviso, IconoCamara, IconoGaleria, IconoIA } from '../../iconos';
+import { Aparecer, vibrar } from '../../movimiento';
+import { crearEstilos, espacio, espacioBarra, radio, tamañoIcono, useTema } from '../../tema';
 
 const PARA = [
   { valor: 'mujer', etiqueta: 'Mujer' },
@@ -100,7 +100,7 @@ export default function PantallaTiendas() {
 
   return (
     <View style={estilos.pantalla}>
-      <Encabezado titulo="Tiendas" />
+      <Encabezado atras titulo="Tiendas" />
       <ScrollView style={estilos.pantalla} contentContainerStyle={estilos.contenido} keyboardShouldPersistTaps="handled">
         <Text style={texto.detalle}>
           ¿Te gustó algo en una tienda y no lo compraste? Tómale foto: primero buscamos esa misma prenda en internet

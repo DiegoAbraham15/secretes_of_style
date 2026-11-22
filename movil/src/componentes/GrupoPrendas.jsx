@@ -1,11 +1,11 @@
-// Prendas en filas juntas dentro de un bloque suave. Con etiqueta lleva encabezado: el nombre del grupo y,
+// Prendas en filas juntas dentro de una tarjeta. Con etiqueta lleva encabezado: el nombre del grupo y,
 // a la derecha, el total o el enlace "Ver las N" si limite deja prendas fuera (lo atiende alVerTodas).
 // compacto: encabezado pequeño, para cuando el grupo va dentro de un paso. El resto de las opciones
 // (conEstado, accion) pasa a cada FilaPrenda; seleccionadaId marca la fila de esa prenda.
 import { Pressable, Text, View } from 'react-native';
 
 import { IconoIr } from '../iconos';
-import { crearEstilos, espacio, fuentes, presionado, radio, tactil, useTema } from '../tema';
+import { crearEstilos, espacio, fuentes, presionado, tactil, useTema } from '../tema';
 import { FilaPrenda } from './FilaPrenda';
 
 // Con "Todas", cada categoría enseña sus primeras prendas y un enlace para ver el resto.
@@ -66,11 +66,11 @@ export function GrupoPrendas({
   );
 }
 
-const useEstilos = crearEstilos(({ colores }) => ({
+const useEstilos = crearEstilos(({ colores, tarjeta }) => ({
   grupo: { gap: espacio.s + 4 },
   cabecera: { flexDirection: 'row', alignItems: 'center', gap: espacio.s },
   tituloCompacto: { fontFamily: fuentes.negrita, fontSize: 16, lineHeight: 24, color: colores.texto },
   enlace: { flexDirection: 'row', alignItems: 'center', gap: 2, minHeight: tactil },
   textoEnlace: { fontFamily: fuentes.media, fontSize: 14, color: colores.primario },
-  filas: { paddingHorizontal: espacio.m, borderRadius: radio.l, backgroundColor: colores.superficieSuave },
+  filas: { ...tarjeta, paddingHorizontal: espacio.m },
 }));

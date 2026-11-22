@@ -168,7 +168,7 @@ const useEstilos = crearEstilos(({ colores }) => ({
   cabecera: { flexDirection: 'row', gap: espacio.m, alignItems: 'flex-start' },
   foto: { width: 104, aspectRatio: 3 / 4, borderRadius: radio.m, backgroundColor: colores.superficieSuave },
   fila: { flexDirection: 'row', alignItems: 'center', gap: espacio.s },
-  veredicto: { fontFamily: fuentes.displayItalica, fontSize: 28, lineHeight: 34, color: colores.texto, flexShrink: 1 },
+  veredicto: { fontFamily: fuentes.negrita, fontSize: 22, lineHeight: 28, color: colores.texto, flexShrink: 1 },
   fotos: { flexDirection: 'row', flexWrap: 'wrap', gap: espacio.s },
   miniatura: { width: 64, aspectRatio: 3 / 4, borderRadius: radio.s, backgroundColor: colores.superficieSuave },
 }));

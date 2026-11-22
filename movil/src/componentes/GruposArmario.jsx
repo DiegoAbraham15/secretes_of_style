@@ -224,7 +224,7 @@ const useEstilos = crearEstilos(({ colores, texto, bloque, separador }) => ({
   grupo: { paddingVertical: espacio.s + 4, gap: espacio.s + 4 },
   cabeceraGrupo: { flexDirection: 'row', alignItems: 'center', gap: espacio.s + 4 },
   nombreGrupo: { flex: 1, fontFamily: fuentes.negrita, fontSize: 15, lineHeight: 20, color: colores.texto },
-  cuenta: { fontFamily: fuentes.display, fontSize: 24, lineHeight: 30 },
+  cuenta: { fontFamily: fuentes.negrita, fontSize: 20, lineHeight: 26 },
   tira: { gap: espacio.s },
   miniatura: { width: 56, height: 56, borderRadius: radio.s, backgroundColor: colores.superficie },
 

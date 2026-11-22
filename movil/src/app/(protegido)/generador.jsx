@@ -14,23 +14,23 @@ import {
   quitarUso,
   registrarUso,
   votarAtuendo,
-} from '../../../api';
+} from '../../api';
 import {
   CATEGORIAS,
   ETIQUETA_CATEGORIA,
   OCASIONES,
   UBICACION_RESPALDO,
   nombreDePrenda,
-} from '../../../catalogos';
-import { Boton } from '../../../componentes/Boton';
-import { Encabezado } from '../../../componentes/Encabezado';
-import { GrupoPrendas, POR_GRUPO } from '../../../componentes/GrupoPrendas';
-import { Perchero } from '../../../componentes/Perchero';
-import { Selector } from '../../../componentes/Selector';
-import { TarjetaClima } from '../../../componentes/TarjetaClima';
-import { IconoAviso, IconoCapsula, IconoSorprendeme, IconoViaje } from '../../../iconos';
-import { Aparecer, useReducirMovimiento, vibrar } from '../../../movimiento';
-import { crearEstilos, espacio, espacioBarra, fuentes, presionado, radio, tamañoIcono, useTema } from '../../../tema';
+} from '../../catalogos';
+import { Boton } from '../../componentes/Boton';
+import { Encabezado } from '../../componentes/Encabezado';
+import { GrupoPrendas, POR_GRUPO } from '../../componentes/GrupoPrendas';
+import { Perchero } from '../../componentes/Perchero';
+import { Selector } from '../../componentes/Selector';
+import { TarjetaClima } from '../../componentes/TarjetaClima';
+import { IconoAviso, IconoCapsula, IconoSorprendeme, IconoViaje } from '../../iconos';
+import { Aparecer, useReducirMovimiento, vibrar } from '../../movimiento';
+import { crearEstilos, espacio, espacioBarra, fuentes, presionado, radio, tamañoIcono, useTema } from '../../tema';
 
 // Encabezado de cada paso: los pasos son una secuencia, así que llevan su número en un círculo.
 function Paso({ numero, titulo, estilo }) {
@@ -253,7 +253,7 @@ export default function PantallaGenerador() {
 
   return (
     <View style={estilos.pantalla}>
-      <Encabezado
+      <Encabezado atras
         titulo="Atuendos de hoy"
         accion={{ icono: IconoViaje, etiqueta: 'Armar la maleta de un viaje', alPresionar: () => router.push('/viaje') }}
       />
