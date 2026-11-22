@@ -91,6 +91,11 @@ def entrenar(datos):
     entrenamiento = cargador(datos, "entrenamiento", True, torch.Generator().manual_seed(SEMILLA))
     validacion = cargador(datos, "validacion", False)
     modelo = CNNAtuendos(len(red_convolucional.CANALES))
+    x_val, y_val = validacion.dataset.tensors
+    print(f"PyTorch {torch.__version__} · dispositivo: {next(modelo.parameters()).device} "
+          f"(CUDA disponible: {torch.cuda.is_available()}) · hilos de CPU: {torch.get_num_threads()}")
+    print(f"Tensores de validación: x {tuple(x_val.shape)} {x_val.dtype} · y {tuple(y_val.shape)} {y_val.dtype} · "
+          f"entrenamiento en {len(entrenamiento)} lotes de {TAMANO_LOTE} por época")
     print(f"Parámetros entrenables: {sum(p.numel() for p in modelo.parameters() if p.requires_grad):,}")
     criterio = nn.BCEWithLogitsLoss()
     optimizador = torch.optim.Adam(modelo.parameters(), lr=TASA_APRENDIZAJE)
@@ -105,16 +110,21 @@ def entrenar(datos):
             optimizador.step()
         perdida_train = perdida_promedio(modelo, entrenamiento, criterio)
         perdida_val = perdida_promedio(modelo, validacion, criterio)
+        with torch.no_grad():  # directo sobre los tensores: un iterador más del DataLoader movería la semilla global
+            p_val = torch.sigmoid(modelo(x_val)).numpy()
+        exactitud_val = float(accuracy_score(datos["y_validacion"], p_val >= 0.5))
+        auc_val = float(roc_auc_score(datos["y_validacion"], p_val))
         planificador.step(perdida_val)
-        historial.append({"epoca": epoca, "perdida_entrenamiento": perdida_train, "perdida_validacion": perdida_val})
+        historial.append({"epoca": epoca, "perdida_entrenamiento": perdida_train, "perdida_validacion": perdida_val,
+                          "exactitud_validacion": exactitud_val, "auc_validacion": auc_val})
         marca = ""
         if perdida_val < mejor:
             mejor, mejor_epoca, mejor_estado, sin_mejora = perdida_val, epoca, copy.deepcopy(modelo.state_dict()), 0
             marca = "  <- mejor"
         else:
             sin_mejora += 1
-        print(f"Época {epoca:02d} · pérdida entrenamiento {perdida_train:.4f} · validación {perdida_val:.4f} · "
-              f"tasa {optimizador.param_groups[0]['lr']:.5f}{marca}")
+        print(f"Época {epoca:02d} · pérdida ent. {perdida_train:.4f} · val. {perdida_val:.4f} · "
+              f"exactitud val. {exactitud_val:.3f} · AUC val. {auc_val:.3f} · tasa {optimizador.param_groups[0]['lr']:.5f}{marca}")
         if sin_mejora >= PACIENCIA:
             print("Early stopping: la validación dejó de mejorar")
             break
