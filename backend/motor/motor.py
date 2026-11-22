@@ -72,6 +72,7 @@ CUERPO = {ROSTRO, BRAZO_IZQ, BRAZO_DER, PIERNA_IZQ, PIERNA_DER}
 # ------------------------------------------------
 
 candado = threading.Lock()  # un trabajo a la vez: la GPU no alcanza para dos
+candado_cpu = threading.Lock()  # quitar fondos y medir selfies corre en el CPU: no espera a CatVTON
 modelos = {}
 
 
@@ -125,7 +126,15 @@ def ruta_segura(texto: str, debe_existir: bool = True) -> Path:
 
 
 def abrir(ruta: Path) -> Image.Image:
-    return ImageOps.exif_transpose(Image.open(ruta)).convert("RGB")  # respeta la orientación del celular
+    """La foto en RGB, respetando la orientación del celular. Un PNG sin fondo se pone sobre blanco: convertirlo
+    directo a RGB dejaría negro lo transparente."""
+    imagen = ImageOps.exif_transpose(Image.open(ruta))
+    if imagen.mode in ("RGBA", "LA", "PA") or "transparency" in imagen.info:
+        rgba = imagen.convert("RGBA")
+        blanco = Image.new("RGB", rgba.size, "white")
+        blanco.paste(rgba, mask=rgba.getchannel("A"))
+        return blanco
+    return imagen.convert("RGB")
 
 
 def etiquetas_de(foto: Image.Image) -> np.ndarray:
@@ -235,6 +244,52 @@ def recortar(imagen: Image.Image, caja: tuple, relleno) -> Image.Image:
 aplicacion = FastAPI(title="Motor del probador")
 
 
+class Recorte(BaseModel):
+    entrada: str
+    salida: str  # .png
+
+
+# Lo que cuenta como prenda cuando la foto la trae puesta una persona (foto de catálogo con modelo).
+PRENDAS_PUESTAS = {SOMBRERO, LENTES, SUPERIOR, FALDA, PANTALON, VESTIDO, CINTURON, ZAPATO_IZQ, ZAPATO_DER, BOLSA, BUFANDA}
+
+
+def recortar_transparente(imagen: Image.Image, alfa: Image.Image) -> Image.Image:
+    """La prenda con fondo transparente, recortada a su contorno con un margen pequeño."""
+    rgba = imagen.convert("RGBA")
+    rgba.putalpha(alfa)
+    caja = alfa.point(lambda a: 255 if a > 30 else 0).getbbox()
+    if caja is None:
+        return rgba
+    margen = int(0.04 * max(imagen.size))
+    return rgba.crop((max(caja[0] - margen, 0), max(caja[1] - margen, 0),
+                      min(caja[2] + margen, imagen.width), min(caja[3] + margen, imagen.height)))
+
+
+@aplicacion.post("/quitar-fondo")
+def quitar_fondo(datos: Recorte):
+    """PNG transparente de la prenda (digitalización del armario). Si la trae puesta una persona, SegFormer deja
+    solo la ropa; si no, U2-Net (rembg) separa la prenda del fondo. Corre en el CPU."""
+    entrada = ruta_segura(datos.entrada)
+    salida = ruta_segura(datos.salida, debe_existir=False)
+    if salida.suffix.lower() != ".png":
+        raise HTTPException(422, "La salida debe ser .png")
+    inicio = time.time()
+    imagen = abrir(entrada)
+    with candado_cpu:
+        etiquetas = etiquetas_de(imagen)
+        alfa = None
+        if np.isin(etiquetas, list(CUERPO)).mean() > 0.01:
+            zona = np.isin(etiquetas, list(PRENDAS_PUESTAS))
+            if zona.mean() > 0.05:
+                alfa = Image.fromarray(zona.astype("uint8") * 255).filter(ImageFilter.GaussianBlur(1))
+        if alfa is None:
+            from rembg import remove
+            alfa = remove(imagen, session=quitafondos()).getchannel("A")
+    salida.parent.mkdir(parents=True, exist_ok=True)
+    recortar_transparente(imagen, alfa).save(salida, optimize=True)
+    return {"segundos": round(time.time() - inicio, 1)}
+
+
 class Validacion(BaseModel):
     foto: str
 
@@ -268,6 +323,39 @@ def validar(datos: Validacion):
     if proporcion({PANTALON, FALDA, VESTIDO, PIERNA_IZQ, PIERNA_DER}) < 0.03:
         return {"valida": False, "motivo": "No se ven tus piernas. Toma la foto de cuerpo completo."}
     return {"valida": True, "motivo": None}
+
+
+def color_de_zona(rgb: np.ndarray, lab: np.ndarray, zona: np.ndarray) -> dict | None:
+    """Mediana del color de una zona, sin los píxeles más oscuros y más claros (cejas, ojos, brillos)."""
+    if zona.sum() < 200:
+        return None
+    luces = lab[..., 0][zona]
+    bajo, alto = np.percentile(luces, [15, 85])
+    zona = zona & (lab[..., 0] >= bajo) & (lab[..., 0] <= alto)
+    mediana_lab = np.median(lab[zona], axis=0)
+    mediana_rgb = np.median(rgb[zona], axis=0).round().astype(int)
+    # OpenCV guarda Lab en 8 bits: L de 0 a 255 y a, b corridos 128.
+    l, a, b = mediana_lab[0] * 100 / 255, mediana_lab[1] - 128, mediana_lab[2] - 128
+    return {"lab": [round(float(l), 1), round(float(a), 1), round(float(b), 1)],
+            "hex": "#{:02X}{:02X}{:02X}".format(*mediana_rgb)}
+
+
+@aplicacion.post("/colorimetria")
+def colorimetria(datos: Validacion):
+    """Color de la piel (rostro) y del cabello en L*a*b*, para la colorimetría personal. Corre en el CPU."""
+    foto = abrir(ruta_segura(datos.foto))
+    foto.thumbnail((640, 640))
+    with candado_cpu:
+        etiquetas = etiquetas_de(foto)
+    rgb = np.asarray(foto)
+    lab = cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB).astype(float)
+    nucleo = np.ones((5, 5), np.uint8)  # sin los bordes del rostro y del cabello, donde se mezcla el fondo
+    rostro = cv2.erode((etiquetas == ROSTRO).astype("uint8"), nucleo).astype(bool)
+    cabello = cv2.erode((etiquetas == CABELLO).astype("uint8"), nucleo).astype(bool)
+    piel = color_de_zona(rgb, lab, rostro)
+    if piel is None:
+        return {"valida": False, "motivo": "No se ve bien tu rostro. Toma la selfie de frente, con luz natural y sin filtros."}
+    return {"valida": True, "piel": piel, "cabello": color_de_zona(rgb, lab, cabello)}
 
 
 @aplicacion.post("/vestir")

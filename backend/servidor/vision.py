@@ -15,14 +15,14 @@ Requisitos: Ollama abierto y el modelo descargado (ollama pull gemma3:4b).
 
 import json
 
-from servidor.logica import COLORES_NEUTROS, COLORES_VIVOS, ESTAMPADOS, ESTILOS
+from servidor.logica import COLORES, ESTAMPADOS, ESTILOS
 from servidor.ollama import preguntar
 
 # ------------------------------------------------
 # 1. LO QUE EL MODELO PUEDE CONTESTAR
 # ------------------------------------------------
 
-# Mismas categorías que principal.CATEGORIAS, con ejemplos para el prompt.
+# Mismas categorías que esquemas.CATEGORIAS, con ejemplos para el prompt.
 EJEMPLOS_CATEGORIA = {
     "parte_superior": "blusa, playera, camisa, top, suéter, sudadera",
     "parte_inferior": "pantalón, jeans, falda, short",
@@ -30,14 +30,14 @@ EJEMPLOS_CATEGORIA = {
     "abrigo": "chamarra, abrigo, gabardina, chaleco, impermeable",
     "accesorio": "bolsa, gorra, sombrero, bufanda, cinturón, lentes, reloj",
 }
-COLORES = sorted(COLORES_NEUTROS | COLORES_VIVOS)
+COLORES_ORDENADOS = sorted(COLORES)
 
 ESQUEMA = {
     "type": "object",
     "properties": {
         "categoria": {"type": "string", "enum": list(EJEMPLOS_CATEGORIA)},
         "subcategoria": {"type": "string"},
-        "color_principal": {"type": "string", "enum": COLORES},
+        "color_principal": {"type": "string", "enum": COLORES_ORDENADOS},
         "estampado": {"type": "string", "enum": ESTAMPADOS},
         "estilo": {"type": "string", "enum": ESTILOS},
         "nivel_abrigo": {"type": "integer", "minimum": 1, "maximum": 5},
@@ -78,7 +78,7 @@ def limpiar_respuesta(datos: dict) -> dict:
     return {
         "categoria": del_catalogo("categoria", EJEMPLOS_CATEGORIA),
         "subcategoria": subcategoria[:1].upper() + subcategoria[1:] or None,
-        "color_principal": del_catalogo("color_principal", COLORES),
+        "color_principal": del_catalogo("color_principal", COLORES_ORDENADOS),
         "estampado": del_catalogo("estampado", ESTAMPADOS),
         "estilo": del_catalogo("estilo", ESTILOS),
         "nivel_abrigo": min(max(abrigo, 1), 5) if isinstance(abrigo, int) and not isinstance(abrigo, bool) else None,
@@ -94,3 +94,44 @@ def detectar_prenda(contenido: bytes) -> dict:
         return limpiar_respuesta(json.loads(respuesta))
     except ValueError:
         return limpiar_respuesta({})
+
+
+# ------------------------------------------------
+# 3. PARA BUSCARLA EN TIENDAS: lo que hace única a la prenda
+# ------------------------------------------------
+
+# En el buscador de tiendas no basta con "Sudadera azul marino": para encontrar ESA prenda hace falta la marca y
+# lo que la distingue ("Tom y Jerry", "Air Force 1"). El modelo los lee de la foto; si no se ven, quedan vacíos.
+ESQUEMA_TIENDA = {
+    "type": "object",
+    "properties": {**ESQUEMA["properties"], "marca": {"type": "string"}, "detalles": {"type": "string"}},
+    "required": ESQUEMA["required"] + ["marca", "detalles"],
+}
+
+INSTRUCCIONES_TIENDA = INSTRUCCIONES + """
+
+La foto se tomó en una tienda para encontrar ESA MISMA prenda en internet. Fíjate en lo que la distingue:
+marca: solo si se lee en la prenda o su logo es inconfundible (Nike, Adidas, Zara, Levi's, Puma...). Si no se ve,
+deja "". No la adivines.
+detalles: de 2 a 6 palabras con lo que hace única a esta prenda y sirve para buscarla: el personaje, el texto o el
+logo del estampado (copia el texto tal como se lee), el modelo (por ejemplo "Air Force 1" o "501") o un detalle que
+se vea (capucha, cierre, bordado, cuello alto). Si es una prenda básica sin nada especial, deja ""."""
+
+SIN_DATO = {"", "ninguna", "ninguno", "no visible", "no se ve", "desconocida", "desconocido", "n/a", "na", "none", "sin marca"}
+
+
+def texto_corto(valor, largo: int) -> str | None:
+    """El texto limpio y recortado; None si el modelo contestó vacío o algo como "no visible"."""
+    texto = " ".join(str(valor or "").split()).strip(" .\"'")[:largo]
+    return None if texto.lower() in SIN_DATO else texto
+
+
+def detectar_para_tienda(contenido: bytes) -> dict:
+    """Como detectar_prenda, más la marca y los detalles que distinguen a la prenda (para la búsqueda exacta)."""
+    respuesta = preguntar(INSTRUCCIONES_TIENDA, "La IA no está disponible ahora", imagen=contenido, formato=ESQUEMA_TIENDA)
+    try:
+        datos = json.loads(respuesta)
+    except ValueError:
+        datos = {}
+    return {**limpiar_respuesta(datos), "marca": texto_corto(datos.get("marca"), 40),
+            "detalles": texto_corto(datos.get("detalles"), 60)}

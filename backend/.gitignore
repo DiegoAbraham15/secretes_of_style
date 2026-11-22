@@ -1,8 +1,12 @@
 .venv/
 __pycache__/
 *.db
+.env
 archivos_subidos/
 privado/
 .clave_secreta
 # LIMPIEZA de datos: CSV que exporta /api/votos/limpieza
 limpieza_de_datos/datos/
+# Entrenamiento de la CNN (entrenamiento_cnn/): entorno y datos simulados; los pesos de modelos_entrenados/ sí se suben
+entrenamiento_cnn/.venv/
+entrenamiento_cnn/datos/

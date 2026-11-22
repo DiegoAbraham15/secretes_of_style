@@ -1,51 +1,19 @@
 """Comprueba el estampado, el estilo y la ocasión (lógica, búsqueda y API) y la explicación con IA.
-Ejecutar desde la carpeta backend: .venv\Scripts\python pruebas\prueba_estilo.py"""
+Ejecutar desde la carpeta backend: .venv\\Scripts\\python pruebas\\prueba_estilo.py"""
 import os
-import sqlite3
-import struct
 import sys
-import tempfile
 import urllib.request
-import zlib
-from pathlib import Path
 
-os.environ["CLAVE_SECRETA"] = "clave-de-prueba"
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-temporal = Path(tempfile.mkdtemp())
+from pruebas.comun import ok, preparar, terminar  # noqa: E402
 
-from servidor import base_datos  # noqa: E402
-
-base_datos.RUTA_BD = temporal / "prueba.db"
-base_datos.CARPETA_ARCHIVOS = temporal / "archivos"
-
-# Simula una base vieja: prendas sin las columnas estampado y estilo.
-c = sqlite3.connect(base_datos.RUTA_BD)
-c.execute("CREATE TABLE prendas (id INTEGER PRIMARY KEY, usuario_id INTEGER NOT NULL, url_imagen TEXT NOT NULL, "
-          "categoria TEXT NOT NULL, subcategoria TEXT, color_principal TEXT NOT NULL, nivel_abrigo INTEGER NOT NULL, "
-          "impermeable INTEGER DEFAULT 0, estado TEXT DEFAULT 'disponible', fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP)")
-c.commit(); c.close()
+temporal = preparar()
 
 from fastapi import HTTPException  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
-from servidor import busqueda, explicacion, ollama, principal  # noqa: E402
-from servidor.logica import es_apta, hechos_de_ocasion, razonar_clima, se_recargan, ventajas_del_atuendo  # noqa: E402
-
-fallas = 0
-
-
-def ok(cond, msg):
-    global fallas
-    fallas += not cond
-    print(("OK   " if cond else "FALLA"), msg)
-
-
-def png_de_color(rojo, verde, azul, lado=64):
-    """Un PNG de un solo color, armado a mano para no depender de Pillow."""
-    def bloque(tipo, datos):
-        return struct.pack(">I", len(datos)) + tipo + datos + struct.pack(">I", zlib.crc32(tipo + datos))
-    fila = b"\x00" + bytes([rojo, verde, azul]) * lado
-    return (b"\x89PNG\r\n\x1a\n" + bloque(b"IHDR", struct.pack(">IIBBBBB", lado, lado, 8, 2, 0, 0, 0))
-            + bloque(b"IDAT", zlib.compress(fila * lado)) + bloque(b"IEND", b""))
+from pruebas.comun import png_de_color  # noqa: E402
+from servidor import base_datos, busqueda, explicacion, ollama, principal  # noqa: E402
+from servidor.logica import ESTILOS, es_apta, hechos_de_ocasion, razonar_clima, se_recargan, ventajas_del_atuendo  # noqa: E402
 
 
 def prenda(id, categoria, color, estampado="liso", estilo="casual", abrigo=2):
@@ -53,9 +21,11 @@ def prenda(id, categoria, color, estampado="liso", estilo="casual", abrigo=2):
             "estado": "disponible", "subcategoria": None, "estampado": estampado, "estilo": estilo}
 
 
-# --- 1. Migración ---
-cols = {r[1] for r in sqlite3.connect(base_datos.RUTA_BD).execute("PRAGMA table_info(prendas)")}
-ok({"estampado", "estilo"} <= cols, "migración agrega estampado y estilo a prendas")
+# --- 1. Esquema ---
+esquema = base_datos.bd().command("listCollections", filter={"name": "prendas"})["cursor"]["firstBatch"][0]
+esquema = esquema["options"]["validator"]["$jsonSchema"]
+ok({"estampado", "estilo"} <= set(esquema["required"]), "el esquema de prendas exige estampado y estilo")
+ok(esquema["properties"]["estilo"]["enum"] == ESTILOS, "el esquema usa el catálogo de estilos de la lógica")
 
 # --- 2. Reglas de la lógica ---
 formal, deporte = razonar_clima(hechos_de_ocasion("formal"))[0], razonar_clima(hechos_de_ocasion("deporte"))[0]
@@ -194,4 +164,4 @@ else:
     except HTTPException as e:
         ok(False, f"modelo real: {e.detail} (¿falta ollama pull {ollama.MODELO}?)")
 
-print("\nFALLAS:", fallas)
+terminar()

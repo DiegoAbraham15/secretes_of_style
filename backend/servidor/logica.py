@@ -22,6 +22,14 @@ UMBRAL_LLUVIA = 40  # probabilidad de lluvia mayor (%) → "lluvia"
 
 COLORES_NEUTROS = {"negro", "blanco", "gris", "beige", "cafe", "azul_marino", "mezclilla"}
 COLORES_VIVOS = {"rojo", "naranja", "amarillo", "verde", "azul", "morado", "rosa"}
+COLORES = COLORES_NEUTROS | COLORES_VIVOS  # los 14 del catálogo
+# Cómo se ve cada color del catálogo (los mismos de movil/src/catalogos.js). Con ellos digitalizar.py traduce el
+# color medido en la foto al nombre más cercano, y colorimetria.py arma las paletas.
+HEX_COLOR = {
+    "negro": "#1A1A1A", "blanco": "#FFFFFF", "gris": "#9CA3AF", "beige": "#E7D8C0", "cafe": "#7C4A2D",
+    "azul_marino": "#1E2A55", "mezclilla": "#4A6FA5", "rojo": "#DC2626", "naranja": "#F97316", "amarillo": "#FACC15",
+    "verde": "#16A34A", "azul": "#2563EB", "morado": "#7C3AED", "rosa": "#EC4899",
+}
 
 # Estampado y estilo de cada prenda; los detecta la IA en la foto (vision.py) y la persona los corrige.
 ESTAMPADOS = ["liso", "rayas", "cuadros", "floral", "animal", "otro"]
@@ -38,7 +46,7 @@ COMPLEMENTARIOS = {
 }
 
 
-# ---------- Reglas: cláusulas de Horn  p1 ∧ p2 ∧ ... ∧ pn → q ----------
+# ---------- Reglas: cláusulas de Horn  c1 ∧ c2 ∧ ... ∧ cn → q ----------
 
 @dataclass(frozen=True)
 class Regla:

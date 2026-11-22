@@ -2,3 +2,6 @@ fastapi>=0.115
 uvicorn[standard]>=0.30
 python-multipart>=0.0.12
 pandas==3.0.6  # LIMPIEZA de datos (carpeta limpieza_de_datos/); 3.0.6 porque Windows bloquea la 3.1.1
+pymongo==4.20.0  # driver oficial de MongoDB
+Pillow==12.3.0  # fotos de las prendas en limpieza_de_datos/limpieza_de_prendas.py
+numpy==2.5.3  # K-means, PCA y modelos de limpieza_de_datos/

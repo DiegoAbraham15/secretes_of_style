@@ -8,7 +8,7 @@ import time
 
 from fastapi import Header, HTTPException
 
-from servidor.base_datos import CARPETA_BACKEND, consultar_uno
+from servidor.base_datos import CARPETA_BACKEND, bd
 
 RUTA_CLAVE = CARPETA_BACKEND / ".clave_secreta"
 DIAS_DE_SESION = 7
@@ -67,10 +67,10 @@ def usuario_actual(authorization: str | None = Header(None)) -> dict:
         usuario_id, version, expira, firma = token.split(".")
         valido = hmac.compare_digest(firma, firmar(f"{usuario_id}.{version}.{expira}"))
         vigente = int(expira) > time.time()
-        usuario = consultar_uno("SELECT id, correo, version_sesion FROM usuarios WHERE id = ?", (int(usuario_id),))
+        usuario = bd().usuarios.find_one({"_id": int(usuario_id)}, {"correo": 1, "version_sesion": 1}) if valido else None
     except (AttributeError, ValueError):
         valido = vigente = usuario = None
 
-    if not (valido and vigente and usuario and str(usuario.pop("version_sesion") or 0) == version):
+    if not (valido and vigente and usuario and str(usuario.get("version_sesion") or 0) == version):
         raise HTTPException(401, "Sesión inválida o expirada")
-    return usuario
+    return {"id": usuario["_id"], "correo": usuario["correo"]}

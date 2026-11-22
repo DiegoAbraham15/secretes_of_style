@@ -1,4 +1,4 @@
-"""Los otros algoritmos de búsqueda de la práctica, sobre el mismo problema de busqueda.py.
+"""Módulo de búsqueda no informada e informada (BFS, DFS, UCS, Greedy y heurísticas), sobre el problema de busqueda.py.
 
 Solo viven en el servidor: la app no los muestra. La recomendación usa A* (busqueda.mejores_atuendos)
 porque da los atuendos más baratos expandiendo pocos estados; los demás se usan solo si se pide otro
@@ -9,8 +9,8 @@ algoritmo en /api/recomendaciones.
   UCS                  cola de prioridad por g: los atuendos más baratos, igual que A*.
   Greedy               cola de prioridad por la h del clima: rápido, pero no garantiza el más barato.
   A*                   cola de prioridad por f = g + h (está en busqueda.py).
-  Heurística simple    la prenda con menor h del clima en cada paso, sin poder regresar (p30heuristica2).
-  Heurística mejorada  la heurística simple con las cuatro mejoras de la práctica: orden de exploración,
+  Heurística simple    la prenda con menor h del clima en cada paso, sin poder regresar (búsqueda voraz).
+  Heurística mejorada  la heurística simple con cuatro mejoras: orden de exploración,
                        estados repetidos, todos los atuendos y límite de profundidad.
 
 h del clima: categorías que faltan + distancia de la última prenda al punto ideal. Ignora el color,
@@ -154,7 +154,7 @@ def heuristica_simple(problema: dict, cantidad: int = 1) -> list[dict]:
 
 
 def heuristica_mejorada(problema: dict, cantidad: int | None = None, limite: int | None = None) -> list[dict]:
-    """La heurística simple con las cuatro mejoras de las prácticas:
+    """La heurística simple con cuatro mejoras:
 
       1. Orden de exploración: primero se prueba la prenda con menor h del clima y los atuendos
          se devuelven en el orden en que se encontraron.

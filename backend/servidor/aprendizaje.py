@@ -32,6 +32,12 @@ AJUSTE_MAXIMO = 1.25  # debe quedar por debajo de la mitad de PENALIZACION_NO_AP
 # evaluación de limpieza_de_datos/evaluacion_del_modelo.py (52 votos, 20 divisiones): con 0.5 los looks con
 # corazón quedaban arriba el 51 % de las veces (casi al azar), con 0.9 el 70 % y solo con el parecido el 72 %.
 PESO_PARECIDO = 0.9
+# CNN 1D (servidor/red_convolucional.py): cuánto pesa la red frente al perceptrón dentro del 10 %
+# que no es parecido (y del 100 % cuando todavía no hay corazones). Medido el 2026-11-19 con
+# limpieza_de_datos/seleccion_del_modelo.py (63 votos, 20 divisiones): validación 0.779 sin CNN, 0.787 con 0.25,
+# 0.800 con 0.5 y 0.804 con 0.75 o 1; se queda el menor de los mejores. Sola, la CNN ordena 0.792 en validación
+# y el perceptrón solo 0.217.
+PESO_CNN = 0.75
 
 
 # Arranque en frío: lo que dice el cuestionario se vuelve el punto de partida del perceptrón, para que los
@@ -96,12 +102,12 @@ def puntuar(pesos: dict[str, float], x: dict[str, float]) -> float:
     return pesos.get("sesgo", 0.0) + sum(pesos.get(nombre, 0.0) * valor for nombre, valor in x.items())
 
 
-def ajustar(pesos: dict[str, float], x: dict[str, float], y: int) -> None:
+def ajustar(pesos: dict[str, float], x: dict[str, float], y: int, tasa: float = TASA) -> None:
     """Regla del perceptrón: solo aprende si se equivocó."""
     if y * puntuar(pesos, x) <= 0:
-        pesos["sesgo"] = pesos.get("sesgo", 0.0) + TASA * y
+        pesos["sesgo"] = pesos.get("sesgo", 0.0) + tasa * y
         for nombre, valor in x.items():
-            pesos[nombre] = pesos.get(nombre, 0.0) + TASA * y * valor
+            pesos[nombre] = pesos.get(nombre, 0.0) + tasa * y * valor
 
 
 def pesos_iniciales(preferencias: dict) -> dict[str, float]:
@@ -113,15 +119,17 @@ def pesos_iniciales(preferencias: dict) -> dict[str, float]:
     return pesos
 
 
-def entrenar(votos: list[dict], iniciales: dict[str, float] | None = None) -> dict[str, float]:
-    """Repasa los votos en orden, EPOCAS veces, desde los pesos del cuestionario.
+def entrenar(votos: list[dict], iniciales: dict[str, float] | None = None, epocas: int = EPOCAS,
+             tasa: float = TASA) -> dict[str, float]:
+    """Repasa los votos en orden, `epocas` veces, desde los pesos del cuestionario.
 
-    Se entrena con todos para que un voto cambiado no deje rastro del anterior.
+    Se entrena con todos para que un voto cambiado no deje rastro del anterior. `epocas` y `tasa` son los
+    hiperparámetros que prueba limpieza_de_datos/optimizacion_hiperparametros.py.
     """
     pesos = dict(iniciales or {})
-    for _ in range(EPOCAS):
+    for _ in range(epocas):
         for voto in votos:
-            ajustar(pesos, voto["caracteristicas"], voto["me_gusta"])
+            ajustar(pesos, voto["caracteristicas"], voto["me_gusta"], tasa)
     return pesos
 
 
@@ -140,10 +148,13 @@ def escalar(valores: list[float]) -> list[float]:
     return [(valor - centro) / mitad for valor in valores]
 
 
-def reordenar(sugerencias: list[dict], pesos: dict[str, float], votos: dict[str, int], gustados: tuple | list = ()) -> list[dict]:
+def reordenar(sugerencias: list[dict], pesos: dict[str, float], votos: dict[str, int], gustados: tuple | list = (),
+              cnn: list[float] | None = None) -> list[dict]:
     """Ordena por costo_final = costo de A* - ajuste por gustos.
 
     votos: firma -> +1 o -1 de lo ya votado. gustados: características de los looks con corazón.
+    cnn: probabilidad de corazón de cada sugerencia según la CNN (None si no hay modelo entrenado: entonces
+    ordena exactamente como antes). Se mezcla con el perceptrón con PESO_CNN, ya escaladas las dos.
 
     El perceptrón deja de aprender en cuanto acierta, así que sus pesos pueden quedar muy chicos. Por eso los
     puntajes se escalan dentro de la lista: lo que cuenta es qué tanto gusta un atuendo frente a los otros, y el
@@ -156,6 +167,8 @@ def reordenar(sugerencias: list[dict], pesos: dict[str, float], votos: dict[str,
     """
     caracteristicas = [caracteristicas_de([e["prenda"] for e in s["elementos"]]) for s in sugerencias]
     puntajes = escalar([puntuar(pesos, x) for x in caracteristicas])
+    if cnn is not None:  # CNN 1D
+        puntajes = [(1 - PESO_CNN) * puntaje + PESO_CNN * red for puntaje, red in zip(puntajes, escalar(cnn))]
     if gustados:
         parecidos = escalar([-min(distancia(x, gustado) for gustado in gustados) for x in caracteristicas])
         puntajes = [(1 - PESO_PARECIDO) * puntaje + PESO_PARECIDO * parecido for puntaje, parecido in zip(puntajes, parecidos)]

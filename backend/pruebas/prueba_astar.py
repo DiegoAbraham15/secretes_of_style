@@ -1,37 +1,21 @@
 """Comprueba que A* devuelve los atuendos más baratos (contra fuerza bruta), los otros algoritmos y la API.
-Ejecutar desde la carpeta backend: .venv\Scripts\python pruebas\prueba_astar.py"""
+Ejecutar desde la carpeta backend: .venv\\Scripts\\python pruebas\\prueba_astar.py"""
 import itertools
 import os
 import random
 import sys
-import tempfile
-from pathlib import Path
 
-os.environ["CLAVE_SECRETA"] = "clave-de-prueba"
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-temporal = Path(tempfile.mkdtemp())
+from pruebas.comun import ok, preparar, terminar  # noqa: E402
 
-from servidor import base_datos  # noqa: E402
-
-base_datos.RUTA_BD = temporal / "prueba.db"
-base_datos.CARPETA_ARCHIVOS = temporal / "archivos"
+temporal = preparar()
 
 from fastapi.testclient import TestClient  # noqa: E402
-from servidor import algoritmos, busqueda, principal  # noqa: E402
-from servidor.logica import ESTILOS
-from servidor.logica import hechos_de_ocasion, razonar_clima  # noqa: E402
-
-fallas = 0
-
-
-def ok(cond, msg):
-    global fallas
-    fallas += not cond
-    print(("OK   " if cond else "FALLA"), msg)
-
+from servidor import algoritmos, base_datos, busqueda, principal  # noqa: E402
+from servidor.esquemas import CATEGORIAS  # noqa: E402
+from servidor.logica import ESTILOS, hechos_de_ocasion, razonar_clima  # noqa: E402
 
 COLORES = list(busqueda.TONO)
-CATEGORIAS = ["parte_superior", "parte_inferior", "calzado", "abrigo", "accesorio"]
 
 
 def armario_al_azar(semilla, n=14):
@@ -160,11 +144,12 @@ cliente = TestClient(principal.aplicacion)
 token = cliente.post("/api/auth/registro", json={"correo": "a@b.com", "contraseña": "12345678"}).json()["token_acceso"]
 h = {"Authorization": f"Bearer {token}"}
 for p in armario:
-    base_datos.ejecutar(
-        "INSERT INTO prendas (id, usuario_id, url_imagen, categoria, subcategoria, color_principal, nivel_abrigo, impermeable, estado) "
-        "VALUES (?, 1, '/archivos/x.jpg', ?, ?, ?, ?, ?, ?)",
-        (p["id"], p["categoria"], p["subcategoria"], p["color_principal"], p["nivel_abrigo"], p["impermeable"], p["estado"]),
-    )
+    base_datos.bd().prendas.insert_one({
+        "_id": p["id"], "usuario_id": 1, "url_imagen": "/archivos/x.jpg", "categoria": p["categoria"],
+        "subcategoria": p["subcategoria"], "color_principal": p["color_principal"], "nivel_abrigo": p["nivel_abrigo"],
+        "impermeable": p["impermeable"], "estampado": "liso", "estilo": "casual", "estado": p["estado"],
+        "fecha_creacion": base_datos.ahora(),
+    })
 principal.obtener_clima = lambda lat, lon: {"temperatura_c": 20, "sensacion_termica_c": 20, "probabilidad_lluvia": 0,
                                             "descripcion": "Despejado", "hechos": [], "deducciones": []}
 r = cliente.post("/api/recomendaciones", headers=h, json={"prenda_base_id": 1, "latitud": 19.4, "longitud": -99.1})
@@ -190,4 +175,4 @@ r = cliente.patch("/api/prendas/2/estado", headers=h, json={"estado": "en_lavado
 ok(r.status_code == 200 and r.json()["estado"] == "en_lavado", "cambiar estado de prenda")
 ok(cliente.delete(f"/api/atuendos/{lista[0]['id']}", headers=h).status_code == 204, "eliminar atuendo")
 
-print("\nFALLAS:", fallas)
+terminar()

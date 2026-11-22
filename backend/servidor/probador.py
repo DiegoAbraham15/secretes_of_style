@@ -19,10 +19,11 @@ import uuid
 from pathlib import Path
 
 from fastapi import HTTPException
+from pymongo.errors import DuplicateKeyError
 
 from servidor import base_datos, gpu, ollama
 from servidor.aprendizaje import firma_de
-from servidor.base_datos import consultar, consultar_uno, ejecutar
+from servidor.base_datos import ahora, bd, como_dict, siguiente_id
 
 MAXIMO_PRUEBAS = 40  # por persona; al pasar se borran las de uso más viejo
 ESPERA_VALIDAR = 120
@@ -63,14 +64,25 @@ def borrar_archivo(ruta: str | None):
         Path(ruta).unlink(missing_ok=True)
 
 
+def leer_prueba(filtro: dict, **opciones) -> dict | None:
+    """Una prueba de la colección pruebas_atuendo, con id en lugar de _id."""
+    return como_dict(bd().pruebas_atuendo.find_one(filtro, **opciones))
+
+
+def pruebas_de(usuario_id: int) -> list[dict]:
+    return [como_dict(p) for p in bd().pruebas_atuendo.find({"usuario_id": usuario_id}, {"ruta": 1, "firma": 1})]
+
+
 def borrar_pruebas(filas: list[dict]):
     for fila in filas:
         borrar_archivo(fila["ruta"])
-        ejecutar("DELETE FROM pruebas_atuendo WHERE id = ?", (fila["id"],))
+        bd().pruebas_atuendo.delete_one({"_id": fila["id"]})
 
 
 def foto_de(usuario_id: int) -> dict:
-    return consultar_uno("SELECT foto_cuerpo, version_foto FROM perfiles WHERE usuario_id = ?", (usuario_id,)) or {}
+    """foto_cuerpo y version_foto, del perfil embebido en el usuario."""
+    usuario = bd().usuarios.find_one({"_id": usuario_id}, {"perfil.foto_cuerpo": 1, "perfil.version_foto": 1})
+    return (usuario or {}).get("perfil", {})
 
 
 def guardar_foto(usuario_id: int, contenido: bytes, extension: str):
@@ -88,30 +100,27 @@ def guardar_foto(usuario_id: int, contenido: bytes, extension: str):
     borrar_foto(usuario_id)
     definitiva = temporal.with_name(f"{usuario_id}_{uuid.uuid4().hex}{extension}")
     temporal.rename(definitiva)
-    ejecutar("UPDATE perfiles SET foto_cuerpo = ? WHERE usuario_id = ?", (str(definitiva), usuario_id))
+    bd().usuarios.update_one({"_id": usuario_id}, {"$set": {"perfil.foto_cuerpo": str(definitiva)}})
 
 
 def borrar_foto(usuario_id: int):
     """Borra la foto y todas las pruebas. Subir la versión invalida lo que el hilo esté generando."""
     borrar_archivo(foto_de(usuario_id).get("foto_cuerpo"))
-    borrar_pruebas(consultar("SELECT id, ruta FROM pruebas_atuendo WHERE usuario_id = ?", (usuario_id,)))
+    borrar_pruebas(pruebas_de(usuario_id))
     shutil.rmtree(base_datos.CARPETA_PRIVADA / "pruebas" / str(usuario_id), ignore_errors=True)
-    ejecutar("UPDATE perfiles SET foto_cuerpo = NULL, version_foto = version_foto + 1 WHERE usuario_id = ?", (usuario_id,))
+    bd().usuarios.update_one({"_id": usuario_id}, {"$set": {"perfil.foto_cuerpo": None}, "$inc": {"perfil.version_foto": 1}})
 
 
 def olvidar_prenda(usuario_id: int, prenda_id: int):
     """Al borrar una prenda se borran las pruebas donde aparece."""
-    filas = consultar("SELECT id, ruta, firma FROM pruebas_atuendo WHERE usuario_id = ?", (usuario_id,))
-    borrar_pruebas([f for f in filas if str(prenda_id) in f["firma"].split("-")])
+    borrar_pruebas([f for f in pruebas_de(usuario_id) if str(prenda_id) in f["firma"].split("-")])
 
 
 def limpiar_viejas(usuario_id: int):
-    filas = consultar(
-        "SELECT id, ruta FROM pruebas_atuendo WHERE usuario_id = ? AND estado IN ('lista', 'error') "
-        "ORDER BY fecha_uso DESC, id DESC LIMIT -1 OFFSET ?",
-        (usuario_id, MAXIMO_PRUEBAS),
-    )
-    borrar_pruebas(filas)
+    """Deja solo las MAXIMO_PRUEBAS terminadas de uso más reciente."""
+    viejas = (bd().pruebas_atuendo.find({"usuario_id": usuario_id, "estado": {"$in": ["lista", "error"]}}, {"ruta": 1})
+              .sort([("fecha_uso", -1), ("_id", -1)]).skip(MAXIMO_PRUEBAS))
+    borrar_pruebas([como_dict(p) for p in viejas])
 
 
 # ------------------------------------------------
@@ -136,10 +145,8 @@ def estado_de(prueba: dict) -> dict:
         respuesta["url"] = f"/api/atuendos/probador/{prueba['id']}/imagen?v={Path(prueba['ruta']).stem}"
     if prueba["estado"] == "en_cola":
         # Cuántas pruebas se atienden antes que esta (de cualquier persona: la GPU es una sola).
-        respuesta["delante"] = consultar_uno(
-            "SELECT COUNT(*) AS n FROM pruebas_atuendo WHERE id < ? AND estado IN ('en_cola', 'procesando')",
-            (prueba["id"],),
-        )["n"]
+        respuesta["delante"] = bd().pruebas_atuendo.count_documents(
+            {"_id": {"$lt": prueba["id"]}, "estado": {"$in": ["en_cola", "procesando"]}})
     return respuesta
 
 
@@ -151,24 +158,27 @@ def pedir(usuario_id: int, prendas: list[dict]) -> dict:
     pasadas = pasadas_de(prendas)
     if not pasadas:
         raise HTTPException(422, "Este look no tiene prendas que se puedan vestir")
-    firma = firma_de_pasadas(pasadas)
-    clave = (usuario_id, firma, foto["version_foto"])
-    prueba = consultar_uno("SELECT * FROM pruebas_atuendo WHERE usuario_id = ? AND firma = ? AND version_foto = ?", clave)
+    clave = {"usuario_id": usuario_id, "firma": firma_de_pasadas(pasadas), "version_foto": foto["version_foto"]}
+    prueba = leer_prueba(clave)
     if prueba is None:
-        ejecutar("INSERT INTO pruebas_atuendo (usuario_id, firma, version_foto, pasos) VALUES (?, ?, ?, ?)",
-                 (*clave, len(pasadas)))
+        try:
+            bd().pruebas_atuendo.insert_one({
+                "_id": siguiente_id("pruebas_atuendo"), **clave, "estado": "en_cola", "paso": 0, "pasos": len(pasadas),
+                "ruta": None, "segundos": None, "error": None, "fecha_creacion": ahora(), "fecha_uso": ahora(),
+            })
+        except DuplicateKeyError:
+            pass  # otra petición igual la creó al mismo tiempo (índice único usuario_id + firma + version_foto)
         despertar.set()
     elif prueba["estado"] == "error":  # pedirla otra vez es reintentar
-        ejecutar("UPDATE pruebas_atuendo SET estado = 'en_cola', error = NULL, paso = 0 WHERE id = ?", (prueba["id"],))
+        marcar(prueba["id"], estado="en_cola", error=None, paso=0)
         despertar.set()
     else:
-        ejecutar("UPDATE pruebas_atuendo SET fecha_uso = CURRENT_TIMESTAMP WHERE id = ?", (prueba["id"],))
-    return consultar_estado(usuario_id, consultar_uno(
-        "SELECT id FROM pruebas_atuendo WHERE usuario_id = ? AND firma = ? AND version_foto = ?", clave)["id"])
+        marcar(prueba["id"], fecha_uso=ahora())
+    return consultar_estado(usuario_id, leer_prueba(clave, projection={"_id": 1})["id"])
 
 
 def buscar_prueba(usuario_id: int, prueba_id: int) -> dict:
-    prueba = consultar_uno("SELECT * FROM pruebas_atuendo WHERE id = ? AND usuario_id = ?", (prueba_id, usuario_id))
+    prueba = leer_prueba({"_id": prueba_id, "usuario_id": usuario_id})
     if prueba is None:
         raise HTTPException(404, "Prueba no encontrada")
     return prueba
@@ -182,7 +192,7 @@ def ruta_de_imagen(usuario_id: int, prueba_id: int) -> Path:
     prueba = buscar_prueba(usuario_id, prueba_id)
     if prueba["estado"] != "lista" or not prueba["ruta"] or not Path(prueba["ruta"]).is_file():
         raise HTTPException(404, "La imagen todavía no está lista")
-    ejecutar("UPDATE pruebas_atuendo SET fecha_uso = CURRENT_TIMESTAMP WHERE id = ?", (prueba_id,))
+    marcar(prueba_id, fecha_uso=ahora())
     return Path(prueba["ruta"])
 
 
@@ -193,7 +203,7 @@ def ruta_de_imagen(usuario_id: int, prueba_id: int) -> Path:
 def iniciar():
     """Lo que se quedó a medias al apagar el servidor vuelve a la cola, y arranca el hilo."""
     global hilo
-    ejecutar("UPDATE pruebas_atuendo SET estado = 'en_cola', paso = 0 WHERE estado = 'procesando'")
+    bd().pruebas_atuendo.update_many({"estado": "procesando"}, {"$set": {"estado": "en_cola", "paso": 0}})
     if hilo is None or not hilo.is_alive():
         hilo = threading.Thread(target=trabajar, name="probador", daemon=True)
         hilo.start()
@@ -204,27 +214,28 @@ def trabajar():
     while True:
         despertar.wait(timeout=60)
         despertar.clear()
-        while (prueba := consultar_uno("SELECT * FROM pruebas_atuendo WHERE estado = 'en_cola' ORDER BY id LIMIT 1")):
+        # La más vieja en cola primero (el _id es consecutivo); el índice cola_del_probador hace rápida la búsqueda.
+        while (prueba := leer_prueba({"estado": "en_cola"}, sort=[("_id", 1)])):
             procesar(prueba)
 
 
 def marcar(prueba_id: int, **campos):
-    asignaciones = ", ".join(f"{columna} = ?" for columna in campos)
-    ejecutar(f"UPDATE pruebas_atuendo SET {asignaciones} WHERE id = ?", (*campos.values(), prueba_id))
+    bd().pruebas_atuendo.update_one({"_id": prueba_id}, {"$set": campos})
 
 
 def guardar_parcial(prueba: dict, pasadas: list[dict], ruta: Path):
     """El resultado de una pasada intermedia (p. ej. solo el pantalón) queda como prueba, para reutilizarla."""
-    anterior = consultar_uno("SELECT ruta FROM pruebas_atuendo WHERE usuario_id = ? AND firma = ? AND version_foto = ?",
-                             (prueba["usuario_id"], firma_de_pasadas(pasadas), prueba["version_foto"]))
+    clave = {"usuario_id": prueba["usuario_id"], "firma": firma_de_pasadas(pasadas), "version_foto": prueba["version_foto"]}
+    anterior = leer_prueba(clave)
     if anterior:
         borrar_archivo(anterior["ruta"])  # su archivo ya no existía o se reemplaza
-    ejecutar(
-        "INSERT INTO pruebas_atuendo (usuario_id, firma, version_foto, estado, paso, pasos, ruta) "
-        "VALUES (?, ?, ?, 'lista', ?, ?, ?) ON CONFLICT (usuario_id, firma, version_foto) "
-        "DO UPDATE SET estado = 'lista', ruta = excluded.ruta, paso = excluded.paso, error = NULL",
-        (prueba["usuario_id"], firma_de_pasadas(pasadas), prueba["version_foto"], len(pasadas), len(pasadas), str(ruta)),
-    )
+        marcar(anterior["id"], estado="lista", ruta=str(ruta), paso=len(pasadas), error=None)
+    else:
+        bd().pruebas_atuendo.insert_one({
+            "_id": siguiente_id("pruebas_atuendo"), **clave, "estado": "lista", "paso": len(pasadas),
+            "pasos": len(pasadas), "ruta": str(ruta), "segundos": None, "error": None,
+            "fecha_creacion": ahora(), "fecha_uso": ahora(),
+        })
 
 
 def procesar(prueba: dict):
@@ -236,7 +247,7 @@ def procesar(prueba: dict):
         foto = foto_de(usuario_id)
         if foto.get("version_foto") != prueba["version_foto"] or not foto.get("foto_cuerpo"):
             raise HTTPException(409, "Cambiaste tu foto: pide la prueba otra vez")
-        prendas = [consultar_uno("SELECT * FROM prendas WHERE id = ? AND usuario_id = ?", (int(i), usuario_id))
+        prendas = [como_dict(bd().prendas.find_one({"_id": int(i), "usuario_id": usuario_id}))
                    for i in prueba["firma"].split("-")]
         if None in prendas:
             raise HTTPException(404, "Una de las prendas ya no está en tu armario")
@@ -245,9 +256,8 @@ def procesar(prueba: dict):
         with gpu.turno:
             ollama.descargar_modelo()
             for numero in range(1, len(pasadas) + 1):
-                hecha = consultar_uno(
-                    "SELECT ruta FROM pruebas_atuendo WHERE usuario_id = ? AND firma = ? AND version_foto = ? "
-                    "AND estado = 'lista'", (usuario_id, firma_de_pasadas(pasadas[:numero]), prueba["version_foto"]))
+                hecha = leer_prueba({"usuario_id": usuario_id, "firma": firma_de_pasadas(pasadas[:numero]),
+                                     "version_foto": prueba["version_foto"], "estado": "lista"})
                 if hecha and hecha["ruta"] and Path(hecha["ruta"]).is_file():
                     actual = hecha["ruta"]  # esa pasada ya se hizo para otro look
                 else:
@@ -261,7 +271,7 @@ def procesar(prueba: dict):
                     if numero < len(pasadas):
                         guardar_parcial(prueba, pasadas[:numero], salida)
                 marcar(prueba["id"], paso=numero)
-        if consultar_uno("SELECT id FROM pruebas_atuendo WHERE id = ?", (prueba["id"],)) is None:
+        if leer_prueba({"_id": prueba["id"]}) is None:
             return  # se borró la foto mientras se generaba
         marcar(prueba["id"], estado="lista", ruta=actual, segundos=round(time.time() - inicio, 1))
     except HTTPException as error:

@@ -8,7 +8,7 @@ import urllib.request
 
 from fastapi import HTTPException
 
-from servidor.base_datos import consultar_uno, ejecutar
+from servidor.base_datos import bd
 from servidor.logica import hechos_del_clima, razonar_clima
 
 URL_OPEN_METEO = "https://api.open-meteo.com/v1/forecast"
@@ -28,9 +28,9 @@ def obtener_clima(latitud: float, longitud: float) -> dict:
     # Cada consulta se guarda en la base por coordenadas redondeadas (~1 km): se reutiliza 30 min
     # y, si Open-Meteo no responde, se usa la última aunque sea más vieja.
     clave = f"{round(latitud, 2)},{round(longitud, 2)}"
-    guardado = consultar_uno("SELECT consultado, reporte FROM climas WHERE clave = ?", (clave,))
+    guardado = bd().climas.find_one({"_id": clave})
     if guardado and time.time() - guardado["consultado"] < MINUTOS_DE_CACHE * 60:
-        return json.loads(guardado["reporte"])
+        return guardado["reporte"]
 
     parametros = urllib.parse.urlencode({
         "latitude": latitud,
@@ -46,7 +46,7 @@ def obtener_clima(latitud: float, longitud: float) -> dict:
     except (urllib.error.URLError, TimeoutError):
         if guardado:
             minutos = round((time.time() - guardado["consultado"]) / 60)
-            return {**json.loads(guardado["reporte"]), "minutos_desactualizado": minutos}
+            return {**guardado["reporte"], "minutos_desactualizado": minutos}
         raise HTTPException(502, "No se pudo consultar el clima")
 
     actual = datos["current"]
@@ -65,8 +65,6 @@ def obtener_clima(latitud: float, longitud: float) -> dict:
         "hechos": sorted(hechos),
         "deducciones": deducciones,
     }
-    ejecutar(
-        "INSERT OR REPLACE INTO climas (clave, consultado, reporte) VALUES (?, ?, ?)",
-        (clave, time.time(), json.dumps(reporte)),
-    )
+    # replace_one con upsert: reemplaza el clima guardado de esas coordenadas o lo crea (el _id es la clave).
+    bd().climas.replace_one({"_id": clave}, {"consultado": time.time(), "reporte": reporte}, upsert=True)
     return reporte

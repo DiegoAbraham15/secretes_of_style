@@ -1,36 +1,19 @@
 """Comprueba el perceptrón de gustos: la regla de aprendizaje, sus garantías frente a A* y la API de votos.
 Ejecutar desde la carpeta backend: .venv\\Scripts\\python pruebas\\prueba_aprendizaje.py"""
-import json
 import os
-import struct
 import sys
-import tempfile
-import zlib
-from pathlib import Path
 
-os.environ["CLAVE_SECRETA"] = "clave-de-prueba"
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-temporal = Path(tempfile.mkdtemp())
+from pruebas.comun import ok, preparar, terminar  # noqa: E402
 
-from servidor import base_datos  # noqa: E402
-
-base_datos.RUTA_BD = temporal / "prueba.db"
-base_datos.CARPETA_ARCHIVOS = temporal / "archivos"
+temporal = preparar()
 
 from fastapi.testclient import TestClient  # noqa: E402
-from servidor import aprendizaje, busqueda, principal  # noqa: E402
+from pruebas.comun import png_de_color  # noqa: E402
+from servidor import base_datos, busqueda, principal  # noqa: E402
 from servidor.aprendizaje import (AJUSTE_MAXIMO, PESOS_DE_RESPUESTA, ajustar, caracteristicas_de, distancia, entrenar,  # noqa: E402
                                   escalar, firma_de, pesos_iniciales, puntuar, reordenar)
 from servidor.logica import es_apta, hechos_de_ocasion, razonar_clima  # noqa: E402
-
-fallas = 0
-
-
-def ok(cond, msg):
-    global fallas
-    fallas += not cond
-    print(("OK   " if cond else "FALLA"), msg)
-
 
 def prenda(id, categoria, color, estilo="casual", abrigo=2, estampado="liso"):
     return {"id": id, "categoria": categoria, "color_principal": color, "nivel_abrigo": abrigo, "impermeable": False,
@@ -190,14 +173,6 @@ ok(pesos["estilo_urbano"] > 0 > pesos["estilo_casual"], "los pesos muestran lo a
 
 
 # --- 4. API ---
-def png(lado=8):
-    def bloque(tipo, datos):
-        return struct.pack(">I", len(datos)) + tipo + datos + struct.pack(">I", zlib.crc32(tipo + datos))
-    fila = b"\x00" + bytes([120, 120, 120]) * lado
-    return (b"\x89PNG\r\n\x1a\n" + bloque(b"IHDR", struct.pack(">IIBBBBB", lado, lado, 8, 2, 0, 0, 0))
-            + bloque(b"IDAT", zlib.compress(fila * lado)) + bloque(b"IEND", b""))
-
-
 principal.obtener_clima = lambda lat, lon: {"hechos": [], "descripcion": "Despejado", "temperatura_c": 20,
                                             "sensacion_termica_c": 20, "probabilidad_lluvia": 0, "deducciones": []}
 with TestClient(principal.aplicacion) as cliente:
@@ -209,7 +184,7 @@ with TestClient(principal.aplicacion) as cliente:
 
     def subir(cabeceras, categoria, color, estilo):
         datos = {"categoria": categoria, "color_principal": color, "nivel_abrigo": "3", "estilo": estilo}
-        return cliente.post("/api/prendas", headers=cabeceras, data=datos, files={"imagen": ("p.png", png(), "image/png")}).json()["id"]
+        return cliente.post("/api/prendas", headers=cabeceras, data=datos, files={"imagen": ("p.png", png_de_color(120, 120, 120, 8), "image/png")}).json()["id"]
 
     playera = subir(h, "parte_superior", "gris", "casual")
     jeans = subir(h, "parte_inferior", "mezclilla", "casual")
@@ -233,10 +208,13 @@ with TestClient(principal.aplicacion) as cliente:
     def votar(ids, me_gusta, cabeceras=h):
         return cliente.post("/api/atuendos/voto", headers=cabeceras, json={"prenda_ids": ids, "me_gusta": me_gusta})
 
-    cuantos = lambda tabla: base_datos.consultar(f"SELECT count(*) AS n FROM {tabla}")[0]["n"]
+    def cuantos(coleccion):
+        if coleccion == "pesos_usuario":  # los pesos van embebidos en el usuario
+            return base_datos.bd().usuarios.count_documents({"pesos": {"$exists": True}})
+        return base_datos.bd()[coleccion].count_documents({})
 
     ok(mostrados == 2 and cuantos("votos_atuendo") == 2, "lo que se muestra queda registrado")
-    voto_de = lambda ids: base_datos.consultar_uno("SELECT * FROM votos_atuendo WHERE firma = ?", (firma_de(ids),))
+    voto_de = lambda ids: base_datos.bd().votos_atuendo.find_one({"firma": firma_de(ids)})
     ok(voto_de([playera, cargo, tenis])["me_gusta"] == -1, "sin corazón cuenta como no me gusta")
     ok(cuantos("pesos_usuario") == 1, "se guardan los pesos")
 
@@ -247,11 +225,11 @@ with TestClient(principal.aplicacion) as cliente:
     ok(r.status_code == 200 and r.json() == {"voto": 1, "votos": 2}, f"el corazón cambia el voto ({r.status_code})")
     guardado = voto_de([playera, cargo, tenis])
     ok(guardado["me_gusta"] == 1, "con corazón cuenta como me gusta")
-    ok(json.loads(guardado["caracteristicas"])["estilo_urbano"] == 2 / 3, "las características las calcula el servidor")
+    ok(guardado["caracteristicas"]["estilo_urbano"] == 2 / 3, "las características las calcula el servidor")
 
     r = votar([tenis, cargo, playera], False)
     ok(r.json() == {"voto": -1, "votos": 2} and cuantos("votos_atuendo") == 2, "quitar el corazón reemplaza el voto")
-    pesos = json.loads(base_datos.consultar_uno("SELECT pesos FROM pesos_usuario")["pesos"])
+    pesos = base_datos.bd().usuarios.find_one({"pesos": {"$exists": True}})["pesos"]["valores"]
     ok(pesos["estilo_urbano"] < 0, "los pesos siguen al voto nuevo, sin rastro del anterior")
 
     votar([playera, cargo, tenis], True)
@@ -277,7 +255,11 @@ with TestClient(principal.aplicacion) as cliente:
     ok(r.status_code == 200 and all("costo_final" not in s for s in r.json()["sugerencias"]), "los otros algoritmos no pasan por el perceptrón")
     ok(cuantos("votos_atuendo") == 2, "los otros algoritmos no registran votos")
 
+    ok(cliente.get("/api/preferencias", headers=h).status_code == 404, "sin cuestionario, ver los gustos da 404")
     ok(cuestionario({"ropa": "urbano"}).status_code == 200, "guardar el cuestionario")
+    gustos = cliente.get("/api/preferencias", headers=h).json()
+    ok(gustos["ropa"] == "urbano" and gustos["paleta"] == "sin_preferencia", "ver los gustos devuelve las respuestas para editarlas")
+    ok(cliente.get("/api/preferencias").status_code == 401, "ver los gustos pide sesión")
     ok(cliente.get("/api/auth/yo", headers=h).json()["cuestionario_listo"] is True, "cuestionario contestado")
     ok(cuantos("votos_atuendo") == 2, "contestar el cuestionario no borra los votos")
     gorra = subir(h, "accesorio", "negro", "casual")
@@ -294,12 +276,22 @@ with TestClient(principal.aplicacion) as cliente:
     subir(nueva, "calzado", "negro", "casual")
     tenis_urbano = subir(nueva, "calzado", "negro", "urbano")
     cuestionario({"ropa": "urbano"}, nueva)
+    # Sin la CNN, en el arranque en frío decide el perceptrón con los pesos del cuestionario. Con la CNN 1D
+    # decide sobre todo la red, que aprendió que el mismo estilo entre prendas vecinas pesa más: en este caso
+    # prefiere el look todo casual. Por eso esta garantía se revisa sin modelo, y aparte se revisa que la red
+    # también tome en cuenta el cuestionario.
+    from servidor import red_convolucional
+    red_convolucional._cargado["pesos"] = None
     r = cliente.post("/api/recomendaciones", headers=nueva, json={**pedido, "prenda_base_id": base_nueva}).json()["sugerencias"]
-    ok({urbana, tenis_urbano} <= set(ids_de(r[0])), "primera generación, sin votos: el cuestionario ya cambia el resultado")
+    red_convolucional._cargado.clear()
+    ok({urbana, tenis_urbano} <= set(ids_de(r[0])), "primera generación, sin votos ni CNN: el cuestionario ya cambia el resultado")
+    if red_convolucional.modelo() is not None:
+        look_urbano = [e["prenda"] for e in r[0]["elementos"]]
+        urbano, sin_respuesta = (red_convolucional.probabilidades([look_urbano], {"ropa": ropa})[0] for ropa in ("urbano", "sin_preferencia"))
+        ok(urbano > sin_respuesta, f"con la CNN el cuestionario también cuenta: el look urbano sube de {sin_respuesta:.2f} a {urbano:.2f}")
 
     cliente.delete(f"/api/prendas/{tenis}", headers=h)
-    ok(base_datos.consultar_uno("SELECT count(*) AS n FROM votos_atuendo WHERE firma LIKE ?", (f"%{playera}%",))["n"] >= 2,
+    ok(base_datos.bd().votos_atuendo.count_documents({"firma": {"$regex": str(playera)}}) >= 2,
        "borrar una prenda conserva lo aprendido")
 
-print("\nFALLAS:", fallas)
-sys.exit(1 if fallas else 0)
+terminar()

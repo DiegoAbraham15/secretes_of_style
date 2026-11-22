@@ -1,37 +1,39 @@
-"""Pruebas de la API con una base de datos y una carpeta temporales (no toca secrets_of_style.db).
-Ejecutar desde la carpeta backend: .venv\Scripts\python pruebas\prueba_api.py"""
+"""Pruebas de la API con una base de MongoDB y una carpeta temporales (no tocan la base secrets_of_style).
+Ejecutar desde la carpeta backend: .venv\\Scripts\\python pruebas\\prueba_api.py"""
+import json
 import os
 import sys
-import tempfile
 import time
 import urllib.error
-from pathlib import Path
 
-os.environ["CLAVE_SECRETA"] = "clave-de-prueba"
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-temporal = Path(tempfile.mkdtemp())
+from pruebas.comun import ok, preparar, terminar  # noqa: E402
 
-from servidor import base_datos  # noqa: E402
+temporal = preparar()
 
-base_datos.RUTA_BD = temporal / "prueba.db"
-base_datos.CARPETA_ARCHIVOS = temporal / "archivos"
-
-# Simula una base vieja: usuarios sin la columna version_sesion.
-import sqlite3  # noqa: E402
-c = sqlite3.connect(base_datos.RUTA_BD)
-c.execute("CREATE TABLE usuarios (id INTEGER PRIMARY KEY, correo TEXT UNIQUE NOT NULL, "
-          "contraseña_hash TEXT NOT NULL, fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP)")
-c.commit(); c.close()
-
+from fastapi import HTTPException  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
-from servidor import clima, principal  # noqa: E402
+from pymongo.errors import WriteError  # noqa: E402
+from servidor import base_datos, clima, principal  # noqa: E402
 
 cliente = TestClient(principal.aplicacion)
-ok = lambda cond, msg: print(("OK   " if cond else "FALLA"), msg)
+bd = base_datos.bd()
 
-# --- Migración ---
-cols = {r[1] for r in sqlite3.connect(base_datos.RUTA_BD).execute("PRAGMA table_info(usuarios)")}
-ok("version_sesion" in cols, "migración agrega version_sesion")
+# --- Colecciones, validación e índices ---
+colecciones = {c["name"]: c["options"] for c in bd.command("listCollections")["cursor"]["firstBatch"]}
+ok({"usuarios", "prendas", "atuendos", "votos_atuendo", "pruebas_atuendo", "climas", "contadores"} <= set(colecciones),
+   "se crean las siete colecciones")
+ok(all("$jsonSchema" in o.get("validator", {}) for o in colecciones.values()), "todas tienen validación $jsonSchema")
+ok(bd.usuarios.index_information()["correo_unico"].get("unique"), "el correo tiene índice único")
+ok(bd.votos_atuendo.index_information()["un_voto_por_atuendo"].get("unique"), "un voto por atuendo (índice único compuesto)")
+principal.crear_colecciones()
+ok(True, "crear las colecciones otra vez no falla (actualiza la validación)")
+try:
+    bd.prendas.insert_one({"_id": 999, "usuario_id": 1, "categoria": "sombrero", "nivel_abrigo": 9})
+    rechazada = False
+except WriteError:
+    rechazada = True
+ok(rechazada, "MongoDB rechaza una prenda que no cumple el esquema")
 
 # --- Sesiones ---
 r = cliente.post("/api/auth/registro", json={"correo": "a@b.com", "contraseña": "12345678"})
@@ -42,6 +44,15 @@ r = cliente.get("/api/auth/yo", headers=h)
 ok(r.status_code == 200 and "version_sesion" not in r.json(), f"token válido y /yo no expone versión {r.json()}")
 token_login = cliente.post("/api/auth/login", json={"correo": "a@b.com", "contraseña": "12345678"}).json()["token_acceso"]
 ok(cliente.get("/api/auth/yo", headers={"Authorization": f"Bearer {token_login}"}).status_code == 200, "login funciona")
+ok(cliente.post("/api/auth/registro", json={"correo": "A@b.com ", "contraseña": "12345678"}).status_code == 409,
+   "correo repetido (con mayúsculas o espacios) -> 409")
+ok(cliente.post("/api/auth/login", json={"correo": {"$ne": ""}, "contraseña": {"$ne": ""}}).status_code == 422,
+   "inyección NoSQL con operadores en el login -> 422")
+ok(cliente.get("/api/prendas?categoria[$ne]=x", headers={"Authorization": f"Bearer {token_login}"}).json() == [],
+   "un filtro con [$ne] se toma como texto, no como operador")
+guardado = bd.usuarios.find_one({"correo": "a@b.com"})
+ok(guardado["_id"] == 1 and guardado["perfil"]["version_foto"] == 0 and "contraseña" not in guardado,
+   "el usuario se guarda con _id consecutivo, perfil embebido y solo el hash")
 partes = token.split(".")
 falso = ".".join([partes[0], partes[1], str(int(partes[2]) + 999), partes[3]])
 ok(cliente.get("/api/auth/yo", headers={"Authorization": f"Bearer {falso}"}).status_code == 401, "token alterado -> 401")
@@ -79,20 +90,36 @@ for origen, debe in [("http://localhost:8081", True), ("http://192.168.1.50:8081
     permitido = r.headers.get("access-control-allow-origin") == origen
     ok(permitido == debe, f"CORS {origen} -> {'permitido' if permitido else 'bloqueado'}")
 
-# --- Clima ---
+# --- Perfil: solo lo que usa la app (la foto del probador) ---
+ok(set(cliente.get("/api/perfil", headers=h).json()) == {"usuario_id", "version_foto", "tiene_foto"},
+   "el perfil trae la versión de la foto y si hay foto")
+ok(cliente.put("/api/perfil", headers=h, json={"altura_cm": 170}).status_code == 405, "ya no se edita altura ni peso")
+ok(cliente.post("/api/perfil/rostro", headers=h).status_code == 404, "ya no existe la foto del rostro")
+ok(cliente.get("/api/clima?latitud=19.43&longitud=-99.13", headers=h).status_code == 404,
+   "el clima ya no es una ruta aparte: llega dentro de /api/recomendaciones")
+
+
+# --- Clima (clima.py, lo usa POST /api/recomendaciones) ---
 def falla(*a, **k):
     raise urllib.error.URLError("sin red")
 
-real = clima.urllib.request.urlopen
+
+def consultar_clima():
+    """(200, reporte) o (código de error, None), como lo vería la ruta de recomendaciones."""
+    try:
+        return 200, clima.obtener_clima(19.43, -99.13)
+    except HTTPException as error:
+        return error.status_code, None
+
+
 clima.urllib.request.urlopen = falla
-r = cliente.get("/api/clima?latitud=19.43&longitud=-99.13", headers=h)
-ok(r.status_code == 502, "sin red y sin clima guardado -> 502")
+estado, _ = consultar_clima()
+ok(estado == 502, "sin red y sin clima guardado -> 502")
 reporte = {"temperatura_c": 20, "sensacion_termica_c": 19, "probabilidad_lluvia": 10, "descripcion": "Nublado",
            "hechos": [], "deducciones": []}
-import json  # noqa: E402
-base_datos.ejecutar("INSERT INTO climas VALUES (?, ?, ?)", ("19.43,-99.13", time.time() - 3 * 3600, json.dumps(reporte)))
-r = cliente.get("/api/clima?latitud=19.43&longitud=-99.13", headers=h)
-ok(r.status_code == 200 and r.json().get("minutos_desactualizado") == 180, f"sin red usa el guardado {r.json()}")
+bd.climas.insert_one({"_id": "19.43,-99.13", "consultado": time.time() - 3 * 3600, "reporte": reporte})
+estado, guardado = consultar_clima()
+ok(estado == 200 and guardado.get("minutos_desactualizado") == 180, f"sin red usa el guardado {guardado}")
 class RespuestaFija:
     """Imita la respuesta de Open-Meteo para que la prueba no dependa de internet."""
     def __init__(self, *args, **kwargs):
@@ -112,7 +139,9 @@ class RespuestaFija:
 
 
 clima.urllib.request.urlopen = RespuestaFija
-r = cliente.get("/api/clima?latitud=19.43&longitud=-99.13", headers=h)
-ok(r.status_code == 200 and "minutos_desactualizado" not in r.json(), f"con red consulta de nuevo ({r.status_code}) {r.json().get('descripcion')}")
-fila = base_datos.consultar_uno("SELECT consultado FROM climas WHERE clave = '19.43,-99.13'")
+estado, nuevo = consultar_clima()
+ok(estado == 200 and "minutos_desactualizado" not in nuevo, f"con red consulta de nuevo ({estado}) {nuevo.get('descripcion')}")
+fila = bd.climas.find_one({"_id": "19.43,-99.13"})
 ok(time.time() - fila["consultado"] < 60, "clima nuevo queda guardado")
+
+terminar()

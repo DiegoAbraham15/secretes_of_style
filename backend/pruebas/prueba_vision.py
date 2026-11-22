@@ -1,43 +1,19 @@
 """Comprueba la detección de prendas: limpieza de la respuesta, esquema, ruta de la API y, si Ollama
 está abierto, una foto de verdad.
-Ejecutar desde la carpeta backend: .venv\Scripts\python pruebas\prueba_vision.py"""
+Ejecutar desde la carpeta backend: .venv\\Scripts\\python pruebas\\prueba_vision.py"""
 import os
-import struct
 import sys
-import tempfile
 import urllib.request
-import zlib
-from pathlib import Path
 
-os.environ["CLAVE_SECRETA"] = "clave-de-prueba"
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-temporal = Path(tempfile.mkdtemp())
+from pruebas.comun import ok, preparar, terminar  # noqa: E402
 
-from servidor import base_datos  # noqa: E402
-
-base_datos.RUTA_BD = temporal / "prueba.db"
-base_datos.CARPETA_ARCHIVOS = temporal / "archivos"
+temporal = preparar()
 
 from fastapi import HTTPException  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from pruebas.comun import png_de_color  # noqa: E402
 from servidor import logica, ollama, principal, vision  # noqa: E402
-
-fallas = 0
-
-
-def ok(cond, msg):
-    global fallas
-    fallas += not cond
-    print(("OK   " if cond else "FALLA"), msg)
-
-
-def png_de_color(rojo, verde, azul, lado=64):
-    """Un PNG de un solo color, armado a mano para no depender de Pillow."""
-    def bloque(tipo, datos):
-        return struct.pack(">I", len(datos)) + tipo + datos + struct.pack(">I", zlib.crc32(tipo + datos))
-    fila = b"\x00" + bytes([rojo, verde, azul]) * lado
-    return (b"\x89PNG\r\n\x1a\n" + bloque(b"IHDR", struct.pack(">IIBBBBB", lado, lado, 8, 2, 0, 0, 0))
-            + bloque(b"IDAT", zlib.compress(fila * lado)) + bloque(b"IEND", b""))
 
 
 # --- 1. Limpieza de la respuesta ---
@@ -97,4 +73,4 @@ else:
     except HTTPException as e:
         ok(False, f"modelo real: {e.detail} (¿falta ollama pull {ollama.MODELO}?)")
 
-print("\nFALLAS:", fallas)
+terminar()

@@ -1,30 +1,22 @@
 """Pruebas del probador virtual con un motor falso: no necesitan GPU ni el motor encendido.
-Usan una base de datos y carpetas temporales (no tocan secrets_of_style.db).
+Usan una base de MongoDB y carpetas temporales (no tocan la base secrets_of_style).
 Ejecutar desde la carpeta backend: .venv\\Scripts\\python pruebas\\prueba_probador.py"""
 import os
 import sys
-import tempfile
 import threading
 import time
 from pathlib import Path
 
-os.environ["CLAVE_SECRETA"] = "clave-de-prueba"
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-temporal = Path(tempfile.mkdtemp())
+from pruebas.comun import ok, preparar, terminar  # noqa: E402
+
+temporal = preparar()
 
 from fastapi import HTTPException  # noqa: E402
-
-from servidor import base_datos  # noqa: E402
-
-base_datos.RUTA_BD = temporal / "prueba.db"
-base_datos.CARPETA_ARCHIVOS = temporal / "archivos"
-base_datos.CARPETA_PRIVADA = temporal / "privado"
-
 from fastapi.testclient import TestClient  # noqa: E402
+from servidor import base_datos, gpu, ollama, principal, probador  # noqa: E402
 
-from servidor import gpu, ollama, principal, probador  # noqa: E402
-
-ok = lambda cond, msg: print(("OK   " if cond else "FALLA"), msg)  # noqa: E731
+pruebas = base_datos.bd().pruebas_atuendo
 JPG = b"\xff\xd8\xff\xe0" + b"0" * 100
 
 # --- Motor falso: copia la foto como resultado y anota cada llamada ---
@@ -188,17 +180,16 @@ with TestClient(principal.aplicacion) as cliente:  # "with" arranca el hilo de l
 
     # --- Lo que se quedó a medias al apagar ---
     url_vieja = esperar(cliente, h, prueba["id"])["url"]
-    base_datos.ejecutar("UPDATE pruebas_atuendo SET estado = 'procesando' WHERE id = ?", (prueba["id"],))
+    pruebas.update_one({"_id": prueba["id"]}, {"$set": {"estado": "procesando"}})
     probador.iniciar()
     retomada = esperar(cliente, h, prueba["id"])
     ok(retomada["estado"] == "lista", "al arrancar se retoma lo que quedó procesando")
     ok(retomada["url"] != url_vieja, "la imagen nueva tiene otra URL, para que el teléfono no muestre la de su caché")
 
     # --- Borrar una prenda borra sus pruebas ---
-    rutas_playera2 = [f["ruta"] for f in base_datos.consultar("SELECT ruta, firma FROM pruebas_atuendo")
-                      if str(playera2) in f["firma"].split("-")]
+    rutas_playera2 = [f["ruta"] for f in pruebas.find() if str(playera2) in f["firma"].split("-")]
     ok(cliente.delete(f"/api/prendas/{playera2}", headers=h).status_code == 204, "se borra una prenda")
-    quedan = [f for f in base_datos.consultar("SELECT firma FROM pruebas_atuendo") if str(playera2) in f["firma"].split("-")]
+    quedan = [f for f in pruebas.find() if str(playera2) in f["firma"].split("-")]
     ok(not quedan and not any(Path(r).exists() for r in rutas_playera2 if r), "sus pruebas y archivos se borran")
 
     # --- Límite por persona ---
@@ -207,7 +198,7 @@ with TestClient(principal.aplicacion) as cliente:  # "with" arranca el hilo de l
     esperar(cliente, h, r["id"])
     # El hilo borra las viejas justo después de marcar "lista": se le da un momento para terminar.
     for _ in range(50):
-        total = base_datos.consultar_uno("SELECT COUNT(*) AS n FROM pruebas_atuendo WHERE usuario_id = 1")["n"]
+        total = pruebas.count_documents({"usuario_id": 1})
         if total <= 2:
             break
         time.sleep(0.1)
@@ -216,10 +207,10 @@ with TestClient(principal.aplicacion) as cliente:  # "with" arranca el hilo de l
     probador.MAXIMO_PRUEBAS = 40
 
     # --- Cambiar o borrar la foto ---
-    viejas = base_datos.consultar("SELECT id, ruta FROM pruebas_atuendo WHERE usuario_id = 1")
+    viejas = list(pruebas.find({"usuario_id": 1}))
     cliente.post("/api/perfil/foto", headers=h, files={"imagen": ("yo2.jpg", JPG)})
     ok(len(list(cuerpos.iterdir())) == 1, "la foto nueva reemplaza a la anterior")
-    ok(not base_datos.consultar("SELECT id FROM pruebas_atuendo WHERE usuario_id = 1")
+    ok(not pruebas.count_documents({"usuario_id": 1})
        and not any(Path(f["ruta"]).exists() for f in viejas if f["ruta"]), "cambiar de foto borra lo generado con la anterior")
     antes = len(vestidas())
     r = cliente.post("/api/atuendos/probador", headers=h, json={"prenda_ids": [playera, pantalon]}).json()
@@ -228,4 +219,6 @@ with TestClient(principal.aplicacion) as cliente:  # "with" arranca el hilo de l
     ok(r.status_code == 200 and r.json()["tiene_foto"] is False, "borrar la foto")
     ok(cliente.get("/api/perfil/foto", headers=h).status_code == 404, "sin foto, ver la foto -> 404")
     ok(not any(cuerpos.iterdir()) and not (base_datos.CARPETA_PRIVADA / "pruebas" / "1").exists()
-       and not base_datos.consultar("SELECT id FROM pruebas_atuendo WHERE usuario_id = 1"), "no queda nada de la persona en privado")
+       and not pruebas.count_documents({"usuario_id": 1}), "no queda nada de la persona en privado")
+
+terminar()
