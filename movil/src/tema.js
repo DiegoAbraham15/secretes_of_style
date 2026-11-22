@@ -1,5 +1,5 @@
 // Sistema de diseño de Secrets of Style: "Lookbook", como el catálogo de looks de una marca de moda
-// (skills frontend-design y UI/UX Pro Max). Papel blanco, tinta berenjena y un solo acento rosa; la
+// (sistema de diseño Lookbook). Papel blanco, tinta berenjena y un solo acento rosa; la
 // personalidad la pone la tipografía Bodoni de las revistas de moda. Ver design-system/secrets-of-style/MASTER.md.
 // Las pantallas usan solo estos tokens: nunca un color o tamaño suelto.
 import { StyleSheet, useColorScheme } from 'react-native';
@@ -31,6 +31,10 @@ const paletas = {
     error: '#B91C1C',
     exito: '#15803D', // punto y texto de "Disponible" (5.0:1; 4.5:1 sobre superficieSuave)
     sombra: '#1A1220',
+    // Grupos de ropa (K-means) en Estadísticas: un color fijo por número de grupo, máximo 4. Validados entre
+    // todos los pares, también con daltonismo; el número va siempre dentro del punto, con su color de texto.
+    grupos: ['#BE185D', '#2A78D6', '#1BAF7A', '#EDA100'],
+    sobreGrupos: ['#FFFFFF', '#FFFFFF', '#1A1220', '#1A1220'],
   },
   oscuro: {
     fondo: '#120D16',
@@ -53,6 +57,8 @@ const paletas = {
     error: '#F87171',
     exito: '#4ADE80', // 9.4:1 sobre superficieSuave
     sombra: '#000000',
+    grupos: ['#DB2777', '#3987E5', '#1BAF7A', '#C98500'], // los mismos tonos, ajustados al fondo oscuro
+    sobreGrupos: ['#FFFFFF', '#120D16', '#120D16', '#120D16'],
   },
 };
 
@@ -111,6 +117,9 @@ function crearTema(nombre) {
       // Rótulo de un grupo (p. ej. "Estampado"): en minúsculas y sin espaciado, solo cuando hace falta nombrar algo.
       antetitulo: { fontFamily: fuentes.media, fontSize: 14, lineHeight: 20, color: colores.textoSecundario },
     },
+    // Bloque suave donde van las filas (Armario, Estadísticas) y la línea fina que separa una fila de otra.
+    bloque: { paddingHorizontal: espacio.m, paddingVertical: espacio.xs, borderRadius: radio.l, backgroundColor: colores.superficieSuave },
+    separador: { borderBottomWidth: 1, borderBottomColor: colores.borde },
     // Contenedor: una línea fina en lugar de sombra; la jerarquía la marcan el tamaño y la tipografía.
     tarjeta: {
       backgroundColor: colores.superficie,

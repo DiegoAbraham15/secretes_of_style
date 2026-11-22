@@ -1,7 +1,8 @@
 // Tu foto: la foto de cuerpo completo con la que el probador virtual viste los looks. Se abre al tocar el
-// avatar del encabezado; por eso aquí también está cerrar sesión. El servidor revisa con la IA que la foto
+// avatar del encabezado; por eso aquí también están "Tus gustos" y cerrar sesión. El servidor revisa con la IA que la foto
 // sirva (rostro, torso y piernas) antes de guardarla, y la guarda en privado: solo la ve esta cuenta.
 import { Image } from 'expo-image';
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 
@@ -9,7 +10,16 @@ import { borrarFotoCuerpo, fotoCuerpo, obtenerPerfil, subirFotoCuerpo } from '..
 import { Boton } from '../../componentes/Boton';
 import { confirmar } from '../../confirmar';
 import { elegirFoto } from '../../fotos';
-import { IconoCamara, IconoEliminar, IconoGaleria, IconoPersona, IconoPrivado, IconoSalir } from '../../iconos';
+import {
+  IconoCamara,
+  IconoCorazon,
+  IconoEliminar,
+  IconoGaleria,
+  IconoPaleta,
+  IconoPersona,
+  IconoPrivado,
+  IconoSalir,
+} from '../../iconos';
 import { Presionable, vibrar } from '../../movimiento';
 import { useSesion } from '../../sesion';
 import { crearEstilos, espacio, fuentes, radio, tamañoIcono, useTema } from '../../tema';
@@ -199,6 +209,8 @@ export default function PantallaTuFoto() {
       <View style={estilos.cuenta}>
         <Text style={texto.antetitulo}>Tu cuenta</Text>
         {correo && <Text style={texto.cuerpoFuerte}>{correo}</Text>}
+        <Boton texto="Tus gustos" icono={IconoCorazon} secundario alPresionar={() => router.push('/mis-gustos')} />
+        <Boton texto="Tu colorimetría" icono={IconoPaleta} secundario alPresionar={() => router.push('/colorimetria')} />
         <Boton texto="Cerrar sesión" icono={IconoSalir} secundario alPresionar={salir} />
       </View>
     </ScrollView>

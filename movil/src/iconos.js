@@ -31,6 +31,17 @@ export { SnowflakeIcon as IconoNieve } from 'phosphor-react-native/src/icons/Sno
 export { SparkleIcon as IconoAtuendos } from 'phosphor-react-native/src/icons/Sparkle';
 export { StarIcon as IconoVentaja } from 'phosphor-react-native/src/icons/Star';
 export { SunIcon as IconoDespejado } from 'phosphor-react-native/src/icons/Sun';
+export { StorefrontIcon as IconoTiendas } from 'phosphor-react-native/src/icons/Storefront';
+export { ArrowSquareOutIcon as IconoAbrirLink } from 'phosphor-react-native/src/icons/ArrowSquareOut';
+export { PencilSimpleIcon as IconoEditar } from 'phosphor-react-native/src/icons/PencilSimple';
+export { SuitcaseRollingIcon as IconoViaje } from 'phosphor-react-native/src/icons/SuitcaseRolling';
+export { CalendarCheckIcon as IconoMeLoPuse } from 'phosphor-react-native/src/icons/CalendarCheck';
+export { ShuffleIcon as IconoSorprendeme } from 'phosphor-react-native/src/icons/Shuffle';
+export { ScalesIcon as IconoValeLaPena } from 'phosphor-react-native/src/icons/Scales';
+export { ThumbsUpIcon as IconoBuenaCompra } from 'phosphor-react-native/src/icons/ThumbsUp';
+export { PaletteIcon as IconoPaleta } from 'phosphor-react-native/src/icons/Palette';
+export { SquaresFourIcon as IconoCapsula } from 'phosphor-react-native/src/icons/SquaresFour';
+export { TrophyIcon as IconoReto } from 'phosphor-react-native/src/icons/Trophy';
 export { TShirtIcon as IconoProbar } from 'phosphor-react-native/src/icons/TShirt';
 export { TrashIcon as IconoEliminar } from 'phosphor-react-native/src/icons/Trash';
 export { WarningIcon as IconoAviso } from 'phosphor-react-native/src/icons/Warning';

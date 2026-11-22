@@ -3,9 +3,8 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { guardarPreferencias } from '../../api';
-import { PREGUNTAS_ESTILO } from '../../catalogos';
 import { Boton } from '../../componentes/Boton';
-import { Selector } from '../../componentes/Selector';
+import { FormularioGustos } from '../../componentes/FormularioGustos';
 import { vibrar } from '../../movimiento';
 import { useSesion } from '../../sesion';
 import { crearEstilos, espacio, fuentes, presionado, tactil, useTema } from '../../tema';
@@ -45,20 +44,7 @@ export default function PantallaCuestionario() {
         <Text style={texto.detalle}>Con esto tus primeros atuendos ya irán contigo. Después aprenderemos de tus corazones.</Text>
       </View>
 
-      {PREGUNTAS_ESTILO.map((pregunta) => (
-        <View key={pregunta.clave} style={{ gap: espacio.s + 4 }}>
-          <Text style={texto.subtitulo} accessibilityRole="header">
-            {pregunta.titulo}
-          </Text>
-          <Selector
-            etiquetaGrupo={pregunta.titulo}
-            opciones={pregunta.opciones}
-            seleccionado={respuestas[pregunta.clave]}
-            alCambiar={(valor) => establecerRespuestas({ ...respuestas, [pregunta.clave]: valor })}
-            estilo={{ marginBottom: 0 }}
-          />
-        </View>
-      ))}
+      <FormularioGustos respuestas={respuestas} alCambiar={establecerRespuestas} />
 
       <View style={{ gap: espacio.xs }}>
         {error && (

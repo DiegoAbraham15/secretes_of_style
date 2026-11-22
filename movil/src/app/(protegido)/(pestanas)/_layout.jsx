@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { IconoArmario, IconoAtuendos, IconoEstadisticas, IconoGuardados } from '../../../iconos';
+import { IconoArmario, IconoAtuendos, IconoEstadisticas, IconoGuardados, IconoTiendas } from '../../../iconos';
 import { altoBarra, espacio, fuentes, radio, tamañoIcono, useTema } from '../../../tema';
 
 // Ícono de cada pestaña: misma familia y peso; la pestaña activa se distingue por color y etiqueta.
@@ -47,6 +47,7 @@ export default function LayoutPestanas() {
       <Tabs.Screen name="index" options={{ title: 'Armario', tabBarIcon: icono(IconoArmario) }} />
       <Tabs.Screen name="generador" options={{ title: 'Atuendos', tabBarIcon: icono(IconoAtuendos) }} />
       <Tabs.Screen name="guardados" options={{ title: 'Guardados', tabBarIcon: icono(IconoGuardados) }} />
+      <Tabs.Screen name="tiendas" options={{ title: 'Tiendas', tabBarIcon: icono(IconoTiendas) }} />
       <Tabs.Screen name="estadisticas" options={{ title: 'Estadísticas', tabBarIcon: icono(IconoEstadisticas) }} />
     </Tabs>
   );

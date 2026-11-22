@@ -1,30 +1,26 @@
+// Nueva prenda: eliges una foto y se vuelve un borrador que el servidor procesa (la IA propone los datos, el motor
+// le quita el fondo, se mide el color y se propone la temporada). Lo que la persona corrige a mano, la IA ya no
+// lo pisa (useFormularioPrenda). "Guardar y agregar otra" deja la pantalla lista para la siguiente; salir con
+// datos sin guardar pide confirmación y descarta el borrador. Arriba, atajos a Varias prendas y Desde un link.
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
-import { useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Switch, Text, View } from 'react-native';
+import { router, useNavigation, usePreventRemove } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 
-import { analizarPrenda, subirPrenda } from '../../api';
-import {
-  CATEGORIAS,
-  COLORES,
-  ESTAMPADOS,
-  ESTILOS,
-  ETIQUETA_CATEGORIA,
-  ETIQUETA_COLOR,
-  ETIQUETA_ESTAMPADO,
-  HEX_COLOR,
-  NIVELES_ABRIGO,
-} from '../../catalogos';
+import { confirmarBorrador, crearBorrador, descartarBorrador, obtenerBorrador, urlImagen } from '../../api';
+import { ETIQUETA_CATEGORIA, ETIQUETA_COLOR, ETIQUETA_ESTAMPADO, HEX_COLOR } from '../../catalogos';
 import { Boton } from '../../componentes/Boton';
-import { Campo } from '../../componentes/Campo';
-import { Selector } from '../../componentes/Selector';
+import { datosDe, faltaAlgo, FormularioPrenda, useFormularioPrenda } from '../../componentes/FormularioPrenda';
+import { confirmar } from '../../confirmar';
 import { elegirFoto } from '../../fotos';
-import { IconoCamara, IconoGaleria, IconoIA } from '../../iconos';
+import { IconoAbrirLink, IconoAgregar, IconoCamara, IconoGaleria, IconoIA } from '../../iconos';
 import { Presionable, vibrar } from '../../movimiento';
 import { crearEstilos, espacio, fuentes, presionado, radio, tactil, tamañoIcono, useTema } from '../../tema';
 
-// Botón de contorno con ícono para elegir el origen de la foto.
-function BotonFoto({ icono: Icono, texto: etiqueta, alPresionar }) {
+const CADA_CUANTO_MS = 1500;
+
+// Botón de contorno con ícono (origen de la foto y atajos).
+function BotonContorno({ icono: Icono, texto: etiqueta, alPresionar }) {
   const { colores } = useTema();
   const estilos = useEstilos();
   return (
@@ -38,46 +34,45 @@ function BotonFoto({ icono: Icono, texto: etiqueta, alPresionar }) {
 export default function PantallaNuevaPrenda() {
   const { colores, texto } = useTema();
   const estilos = useEstilos();
-  const [imagen, establecerImagen] = useState(null); // { uri, nombre }
-  const [categoria, establecerCategoria] = useState(null);
-  const [subcategoria, establecerSubcategoria] = useState('');
-  const [color, establecerColor] = useState(null);
-  const [estampado, establecerEstampado] = useState('liso');
-  const [estilo, establecerEstilo] = useState('casual');
-  const [nivelAbrigo, establecerNivelAbrigo] = useState(null);
-  const [impermeable, establecerImpermeable] = useState(false);
+  const navegacion = useNavigation();
+  const { valores, cambiar, aplicarPropuesta, reiniciar } = useFormularioPrenda();
+  const [fotoLocal, establecerFotoLocal] = useState(null);
+  const [borrador, establecerBorrador] = useState(null);
+  const [subiendo, establecerSubiendo] = useState(false);
+  const [guardando, establecerGuardando] = useState(null); // 'cerrar' | 'otra'
+  const [agregadas, establecerAgregadas] = useState(0);
   const [error, establecerError] = useState(null);
-  const [guardando, establecerGuardando] = useState(false);
-  const [analisis, establecerAnalisis] = useState(null); // { cargando } o { texto, error }
-  const fotoActual = useRef(null); // si cambian la foto mientras se analiza, se ignora la respuesta vieja
+  const guardada = useRef(false);
 
-  // La IA del servidor propone los datos de la prenda; la persona los revisa y corrige antes de guardar.
-  async function analizar(uri) {
-    fotoActual.current = uri;
-    establecerAnalisis({ cargando: true });
-    try {
-      const prenda = await analizarPrenda(uri, 'prenda.jpg');
-      if (fotoActual.current !== uri) return;
-      if (prenda.categoria) establecerCategoria(prenda.categoria);
-      if (prenda.subcategoria) establecerSubcategoria(prenda.subcategoria);
-      if (prenda.color_principal) establecerColor(prenda.color_principal);
-      if (prenda.estampado) establecerEstampado(prenda.estampado);
-      if (prenda.estilo) establecerEstilo(prenda.estilo);
-      if (prenda.nivel_abrigo) establecerNivelAbrigo(prenda.nivel_abrigo);
-      establecerImpermeable(prenda.impermeable);
-      const resumen = [
-        prenda.subcategoria || ETIQUETA_CATEGORIA[prenda.categoria],
-        ETIQUETA_COLOR[prenda.color_principal],
-        ETIQUETA_ESTAMPADO[prenda.estampado],
-      ]
-        .filter(Boolean)
-        .join(', ');
-      establecerAnalisis({ texto: `Detectado con IA: ${resumen}. Revisa los datos antes de guardar.` });
-    } catch {
-      if (fotoActual.current !== uri) return;
-      establecerAnalisis({ error: true, texto: 'No se pudo analizar la foto; llena los datos a mano.' });
+  const procesando = borrador && (borrador.estado === 'en_fila' || borrador.estado === 'analizando');
+  const lista = borrador?.estado === 'lista';
+
+  // Mientras la IA y el motor trabajan, se pregunta cómo van.
+  useEffect(() => {
+    if (!procesando) return undefined;
+    const temporizador = setInterval(() => {
+      obtenerBorrador(borrador.id)
+        .then(establecerBorrador)
+        .catch(() => {});
+    }, CADA_CUANTO_MS);
+    return () => clearInterval(temporizador);
+  }, [procesando, borrador?.id]);
+
+  useEffect(() => {
+    if (lista) aplicarPropuesta(borrador.propuesta);
+  }, [lista, borrador?.propuesta, aplicarPropuesta]);
+
+  // Salir con una foto sin guardar: se pregunta y, si sale, el borrador se descarta.
+  usePreventRemove(Boolean(borrador), ({ data }) => {
+    if (guardada.current) {
+      navegacion.dispatch(data.action); // se acaba de guardar: sale sin preguntar
+      return;
     }
-  }
+    confirmar('¿Salir sin guardar?', 'La foto y los datos de esta prenda se perderán.', 'Salir', () => {
+      descartarBorrador(borrador.id).catch(() => {});
+      navegacion.dispatch(data.action);
+    });
+  });
 
   async function elegirImagen(desdeCamara) {
     let uri;
@@ -88,147 +83,145 @@ export default function PantallaNuevaPrenda() {
       return;
     }
     if (!uri) return;
-    establecerImagen({ uri, nombre: 'prenda.jpg' });
+    if (borrador) descartarBorrador(borrador.id).catch(() => {}); // la foto anterior ya no se usa
+    establecerFotoLocal(uri);
+    establecerBorrador(null);
     establecerError(null);
-    analizar(uri);
-  }
-
-  async function guardar() {
-    if (!imagen || !categoria || !color || !nivelAbrigo) {
-      establecerError('Falta la foto, la categoría, el color o el nivel de abrigo.');
-      return;
-    }
-    establecerGuardando(true);
-    establecerError(null);
+    establecerSubiendo(true);
     try {
-      await subirPrenda({
-        uriImagen: imagen.uri,
-        nombreImagen: imagen.nombre,
-        categoria,
-        subcategoria: subcategoria.trim(),
-        color_principal: color,
-        nivel_abrigo: nivelAbrigo,
-        impermeable,
-        estampado,
-        estilo,
-      });
-      vibrar.exito();
-      router.back();
+      establecerBorrador(await crearBorrador(uri));
     } catch (e) {
       establecerError(e.message);
     } finally {
-      establecerGuardando(false);
+      establecerSubiendo(false);
     }
   }
 
+  async function guardar(otra) {
+    if (!borrador || faltaAlgo(valores)) {
+      establecerError('Falta la foto, la categoría, el color o el nivel de abrigo.');
+      return;
+    }
+    establecerGuardando(otra ? 'otra' : 'cerrar');
+    establecerError(null);
+    try {
+      await confirmarBorrador(borrador.id, datosDe(valores));
+      vibrar.exito();
+      if (otra) {
+        establecerAgregadas((n) => n + 1);
+        establecerBorrador(null);
+        establecerFotoLocal(null);
+        reiniciar();
+      } else {
+        guardada.current = true;
+        router.back();
+      }
+    } catch (e) {
+      establecerError(e.message);
+    } finally {
+      establecerGuardando(null);
+    }
+  }
+
+  const propuesta = borrador?.propuesta ?? {};
+  const resumenIA = [
+    propuesta.subcategoria || ETIQUETA_CATEGORIA[propuesta.categoria],
+    ETIQUETA_COLOR[propuesta.color_principal],
+    ETIQUETA_ESTAMPADO[propuesta.estampado],
+  ]
+    .filter(Boolean)
+    .join(', ');
+  const foto = lista ? urlImagen(borrador.url_imagen) : fotoLocal;
+
   return (
     <ScrollView style={estilos.pantalla} contentContainerStyle={estilos.contenido} keyboardShouldPersistTaps="handled">
-      {/* Foto de la prenda: grande y centrada, con una vista previa de cómo se verá en el armario */}
+      {/* Atajos: muchas prendas o una de una tienda en línea */}
+      <View style={estilos.atajos}>
+        <BotonContorno icono={IconoGaleria} texto="Varias fotos" alPresionar={() => router.replace('/carga-masiva')} />
+        <BotonContorno icono={IconoAbrirLink} texto="Desde un link" alPresionar={() => router.replace('/importar')} />
+      </View>
+
+      {agregadas > 0 && (
+        <Text style={[texto.detalle, { textAlign: 'center', marginBottom: espacio.m }]} accessibilityLiveRegion="polite">
+          {agregadas} {agregadas === 1 ? 'prenda agregada' : 'prendas agregadas'}. Sigue con la próxima.
+        </Text>
+      )}
+
       <View style={estilos.zonaFoto}>
         <Pressable
           onPress={() => elegirImagen(false)}
           accessibilityRole="button"
-          accessibilityLabel={imagen ? 'Cambiar foto desde la galería' : 'Agregar foto desde la galería'}
-          style={({ pressed }) => [estilos.marcoFoto, !imagen && estilos.marcoVacio, pressed && presionado]}>
-          {imagen ? (
-            <Image source={{ uri: imagen.uri }} style={estilos.foto} contentFit="cover" transition={200} />
+          accessibilityLabel={foto ? 'Cambiar foto desde la galería' : 'Agregar foto desde la galería'}
+          style={({ pressed }) => [estilos.marcoFoto, !foto && estilos.marcoVacio, pressed && presionado]}>
+          {foto ? (
+            <Image source={{ uri: foto }} style={estilos.foto} contentFit={borrador?.sin_fondo ? 'contain' : 'cover'} transition={250} />
           ) : (
             <View style={estilos.sinFoto}>
               <IconoGaleria color={colores.primario} size={tamañoIcono.l} />
               <Text style={[texto.cuerpoFuerte, { marginTop: espacio.m }]}>Agrega una foto</Text>
               <Text style={[texto.nota, { textAlign: 'center', marginTop: espacio.xs }]}>
-                Sobre un fondo liso y con buena luz se ve mejor
+                Le quitamos el fondo solos; con buena luz se ve mejor
               </Text>
             </View>
           )}
-          {imagen && color && <View style={[estilos.muestraFoto, { backgroundColor: HEX_COLOR[color] }]} />}
+          {foto && valores.color_principal && (
+            <View style={[estilos.muestraFoto, { backgroundColor: HEX_COLOR[valores.color_principal] }]} />
+          )}
         </Pressable>
 
-        {imagen && (
-          <View style={{ alignItems: 'center', marginTop: espacio.m }}>
-            <Text style={texto.cuerpoFuerte} numberOfLines={1}>
-              {subcategoria.trim() || ETIQUETA_CATEGORIA[categoria] || 'Tu prenda'}
-            </Text>
-            <Text style={texto.nota}>
-              {[
-                ETIQUETA_COLOR[color],
-                estampado !== 'liso' && ETIQUETA_ESTAMPADO[estampado].toLowerCase(),
-                nivelAbrigo && `abrigo ${nivelAbrigo} de 5`,
-                impermeable && 'impermeable',
-              ]
-                .filter(Boolean)
-                .join(', ') || 'Completa los datos de abajo'}
+        {(subiendo || borrador) && (
+          <View style={estilos.avisoIA} accessibilityLiveRegion="polite">
+            {subiendo || procesando ? (
+              <ActivityIndicator color={colores.primario} size="small" />
+            ) : (
+              <IconoIA color={borrador?.estado === 'error' ? colores.error : colores.primario} size={tamañoIcono.s} />
+            )}
+            <Text style={[texto.detalle, { flex: 1 }]}>
+              {subiendo
+                ? 'Subiendo la foto…'
+                : procesando
+                  ? 'La IA la está viendo y quitando el fondo…'
+                  : borrador.estado === 'error'
+                    ? 'No se pudo analizar; llena los datos a mano.'
+                    : [
+                        resumenIA ? `Detectado con IA: ${resumenIA}.` : null,
+                        borrador.sin_fondo ? 'Fondo quitado.' : null,
+                        ...(borrador.avisos ?? []),
+                        'Revisa los datos antes de guardar.',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
             </Text>
           </View>
         )}
-
-        {analisis && (
-          <View style={estilos.avisoIA} accessibilityLiveRegion="polite">
-            {analisis.cargando ? (
-              <ActivityIndicator color={colores.primario} size="small" />
-            ) : (
-              <IconoIA color={analisis.error ? colores.error : colores.primario} size={tamañoIcono.s} />
-            )}
-            <Text style={[texto.detalle, { flex: 1 }, analisis.error && { color: colores.error }]}>
-              {analisis.cargando ? 'Analizando la foto con IA…' : analisis.texto}
-            </Text>
-          </View>
+        {borrador?.duplicada_de && (
+          <Text style={[texto.detalle, { color: colores.texto, marginTop: espacio.s }]}>Ya tienes esta misma foto en tu armario.</Text>
         )}
 
         <View style={estilos.botonesFoto}>
-          <BotonFoto
-            icono={IconoGaleria}
-            texto={imagen ? 'Otra de galería' : 'Galería'}
-            alPresionar={() => elegirImagen(false)}
-          />
-          <BotonFoto icono={IconoCamara} texto={imagen ? 'Tomar otra' : 'Cámara'} alPresionar={() => elegirImagen(true)} />
+          <BotonContorno icono={IconoGaleria} texto={foto ? 'Otra de galería' : 'Galería'} alPresionar={() => elegirImagen(false)} />
+          <BotonContorno icono={IconoCamara} texto={foto ? 'Tomar otra' : 'Cámara'} alPresionar={() => elegirImagen(true)} />
         </View>
       </View>
 
-      <Selector titulo="Categoría" opciones={CATEGORIAS} seleccionado={categoria} alCambiar={establecerCategoria} />
-
-      <Text style={texto.antetitulo} nativeID="etiquetaTipo">
-        Tipo de prenda (opcional)
-      </Text>
-      <Campo
-        value={subcategoria}
-        onChangeText={establecerSubcategoria}
-        placeholder="Blusa, jeans, botines"
-        maxLength={60}
-        accessibilityLabel="Tipo de prenda, opcional"
-        accessibilityLabelledBy="etiquetaTipo"
-        estilo={estilos.campo}
-      />
-
-      <Selector titulo="Color principal" opciones={COLORES} seleccionado={color} alCambiar={establecerColor} />
-      <Selector titulo="Estampado" opciones={ESTAMPADOS} seleccionado={estampado} alCambiar={establecerEstampado} />
-      <Selector titulo="Estilo" opciones={ESTILOS} seleccionado={estilo} alCambiar={establecerEstilo} />
-      <Selector
-        titulo="Nivel de abrigo"
-        opciones={NIVELES_ABRIGO}
-        seleccionado={nivelAbrigo}
-        alCambiar={establecerNivelAbrigo}
-      />
-
-      <View style={estilos.interruptor}>
-        <View style={{ flex: 1 }}>
-          <Text style={texto.cuerpoFuerte}>Impermeable</Text>
-          <Text style={texto.detalle}>Resiste la lluvia</Text>
-        </View>
-        <Switch
-          value={impermeable}
-          onValueChange={establecerImpermeable}
-          accessibilityLabel="Impermeable"
-          trackColor={{ true: colores.primario, false: colores.bordeControl }}
-        />
-      </View>
+      <FormularioPrenda valores={valores} alCambiar={cambiar} conCompra />
 
       {error && (
         <Text style={estilos.error} accessibilityLiveRegion="polite" accessibilityRole="alert">
           {error}
         </Text>
       )}
-      <Boton texto="Guardar prenda" alPresionar={guardar} cargando={guardando} />
+      <View style={{ gap: espacio.s }}>
+        <Boton texto="Guardar prenda" alPresionar={() => guardar(false)} cargando={guardando === 'cerrar'} deshabilitado={!borrador || Boolean(guardando)} />
+        <Boton
+          texto="Guardar y agregar otra"
+          icono={IconoAgregar}
+          secundario
+          alPresionar={() => guardar(true)}
+          cargando={guardando === 'otra'}
+          deshabilitado={!borrador || Boolean(guardando)}
+        />
+      </View>
     </ScrollView>
   );
 }
@@ -236,6 +229,7 @@ export default function PantallaNuevaPrenda() {
 const useEstilos = crearEstilos(({ colores, texto }) => ({
   pantalla: { flex: 1, backgroundColor: colores.fondo },
   contenido: { padding: espacio.l, paddingBottom: espacio.xxl },
+  atajos: { flexDirection: 'row', gap: espacio.s, justifyContent: 'center', marginBottom: espacio.l },
   zonaFoto: { alignItems: 'center', marginBottom: espacio.xl },
   marcoFoto: {
     width: '62%',
@@ -245,12 +239,7 @@ const useEstilos = crearEstilos(({ colores, texto }) => ({
     backgroundColor: colores.superficieSuave,
     overflow: 'hidden',
   },
-  marcoVacio: {
-    backgroundColor: colores.superficie,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: colores.primario,
-  },
+  marcoVacio: { backgroundColor: colores.superficie, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colores.primario },
   foto: { width: '100%', height: '100%' },
   sinFoto: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: espacio.m },
   muestraFoto: {
@@ -287,7 +276,5 @@ const useEstilos = crearEstilos(({ colores, texto }) => ({
     backgroundColor: colores.superficie,
   },
   textoBotonFoto: { fontFamily: fuentes.negrita, fontSize: 15, color: colores.primario },
-  campo: { marginTop: espacio.s, marginBottom: espacio.l },
-  interruptor: { flexDirection: 'row', alignItems: 'center', minHeight: tactil, marginBottom: espacio.l },
   error: { ...texto.detalle, color: colores.error, marginBottom: espacio.m },
 }));

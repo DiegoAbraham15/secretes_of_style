@@ -2,12 +2,13 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from 'react-native';
 
-import { listarPrendas } from '../../../api';
+import { listarBorradores, listarPrendas, obtenerReto } from '../../../api';
 import { CATEGORIAS, ETIQUETA_CATEGORIA, ETIQUETA_COLOR, ETIQUETA_ESTAMPADO, nombreDePrenda } from '../../../catalogos';
 import { Encabezado } from '../../../componentes/Encabezado';
 import { GrupoPrendas, POR_GRUPO } from '../../../componentes/GrupoPrendas';
 import { Selector } from '../../../componentes/Selector';
-import { IconoAgregar, IconoArmario, IconoBuscar, IconoLimpiar } from '../../../iconos';
+import { TarjetaReto } from '../../../componentes/TarjetaReto';
+import { IconoAgregar, IconoArmario, IconoBuscar, IconoIr, IconoLimpiar } from '../../../iconos';
 import { Aparecer } from '../../../movimiento';
 import { crearEstilos, espacio, espacioBarra, fuentes, presionado, radio, tactil, tamañoIcono, useTema } from '../../../tema';
 
@@ -36,9 +37,23 @@ export default function PantallaArmario() {
   const [cargando, establecerCargando] = useState(true);
   const [recargando, establecerRecargando] = useState(false); // al deslizar hacia abajo
   const [error, establecerError] = useState(null);
+  const [porConfirmar, establecerPorConfirmar] = useState(0); // fotos de Varias prendas que esperan confirmación
+  const [reto, establecerReto] = useState(null); // el reto de la semana (si hay prendas olvidadas)
+
+  const cargarReto = useCallback(async (nuevo) => {
+    try {
+      establecerReto(nuevo ?? (await obtenerReto()));
+    } catch {
+      establecerReto(null);
+    }
+  }, []);
 
   const cargar = useCallback(async () => {
     establecerError(null);
+    listarBorradores()
+      .then((borradores) => establecerPorConfirmar(borradores.length))
+      .catch(() => establecerPorConfirmar(0));
+    cargarReto();
     try {
       establecerPrendas(await listarPrendas({ categoria: filtro === 'todas' ? null : filtro }));
     } catch (e) {
@@ -46,7 +61,7 @@ export default function PantallaArmario() {
     } finally {
       establecerCargando(false);
     }
-  }, [filtro]);
+  }, [filtro, cargarReto]);
 
   // Recarga cada vez que la pantalla vuelve a verse (p. ej. después de agregar o cambiar una prenda).
   useFocusEffect(
@@ -107,13 +122,29 @@ export default function PantallaArmario() {
         onRefresh={recargar}
         refreshing={recargando}
         ListHeaderComponent={
-          <Selector
-            opciones={FILTROS}
-            seleccionado={filtro}
-            alCambiar={establecerFiltro}
-            enLinea
-            estilo={estilos.filtros}
-          />
+          <>
+            {reto && reto.estado === 'activo' && filtro === 'todas' && !busqueda && (
+              <TarjetaReto reto={reto} alCambiar={cargarReto} />
+            )}
+            {porConfirmar > 0 && (
+              <Pressable
+                onPress={() => router.push('/carga-masiva')}
+                accessibilityRole="button"
+                style={({ pressed }) => [estilos.pendientes, pressed && presionado]}>
+                <Text style={[texto.cuerpoFuerte, { flex: 1 }]}>
+                  {porConfirmar} {porConfirmar === 1 ? 'prenda espera' : 'prendas esperan'} tu confirmación
+                </Text>
+                <IconoIr color={colores.primario} size={tamañoIcono.s} weight="bold" />
+              </Pressable>
+            )}
+            <Selector
+              opciones={FILTROS}
+              seleccionado={filtro}
+              alCambiar={establecerFiltro}
+              enLinea
+              estilo={estilos.filtros}
+            />
+          </>
         }
         renderItem={({ item, index }) => (
           // Los grupos entran en cascada.
@@ -171,6 +202,16 @@ const useEstilos = crearEstilos(({ colores }) => ({
   // Espacio abajo para que la barra de pestañas no tape el último grupo.
   lista: { paddingBottom: espacioBarra, gap: espacio.l },
   filtros: { marginTop: espacio.m, marginBottom: 0 },
+  pendientes: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: espacio.s,
+    marginHorizontal: espacio.m,
+    marginTop: espacio.m,
+    padding: espacio.m,
+    borderRadius: radio.l,
+    backgroundColor: colores.primarioSuave,
+  },
   grupo: { paddingHorizontal: espacio.m },
   buscador: {
     minHeight: tactil,

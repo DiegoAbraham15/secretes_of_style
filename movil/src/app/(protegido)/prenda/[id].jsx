@@ -5,29 +5,30 @@ import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 
 import {
   cambiarEstadoPrenda,
-  cambiarEstiloPrenda,
   detectarEstiloPrenda,
+  editarPrenda,
   eliminarPrenda,
   obtenerPrenda,
+  quitarFondoPrenda,
   revisarPrenda, // LIMPIEZA de datos
   urlImagen,
 } from '../../../api';
 import {
   ESTADOS,
-  ESTAMPADOS,
-  ESTILOS,
   ETIQUETA_CATEGORIA,
-  ETIQUETA_COLOR,
   ETIQUETA_ESTAMPADO,
   ETIQUETA_ESTILO,
+  ETIQUETA_TEMPORADA,
   HEX_COLOR,
   NIVELES_ABRIGO,
+  nombreConColor,
   nombreDePrenda,
 } from '../../../catalogos';
 import { Boton } from '../../../componentes/Boton';
+import { datosDe, faltaAlgo, FormularioPrenda, useFormularioPrenda } from '../../../componentes/FormularioPrenda';
 import { Selector } from '../../../componentes/Selector';
 import { confirmar } from '../../../confirmar';
-import { IconoAviso, IconoEliminar, IconoIA } from '../../../iconos';
+import { IconoAviso, IconoEditar, IconoEliminar, IconoIA, IconoPalomita } from '../../../iconos';
 import { Aparecer, vibrar } from '../../../movimiento';
 import { crearEstilos, espacio, radio, useTema } from '../../../tema';
 
@@ -47,12 +48,21 @@ export default function PantallaPrenda() {
   const [eliminando, establecerEliminando] = useState(false);
   const [detectando, establecerDetectando] = useState(false);
   const [motivos, establecerMotivos] = useState([]); // LIMPIEZA de datos: por qué revisar esta prenda
+  const [editando, establecerEditando] = useState(false);
+  const [quitandoFondo, establecerQuitandoFondo] = useState(false);
+  const formulario = useFormularioPrenda();
 
   useEffect(() => {
     obtenerPrenda(id)
       .then(establecerPrenda)
       .catch((e) => establecerError(e.message));
   }, [id]);
+
+  // Al abrir "Editar datos", el formulario parte de lo que tiene la prenda ahora.
+  function abrirEdicion() {
+    formulario.reiniciar(prenda);
+    establecerEditando(true);
+  }
 
   // LIMPIEZA de datos: si falla, simplemente no se muestra el aviso.
   useEffect(() => {
@@ -75,19 +85,31 @@ export default function PantallaPrenda() {
     }
   }
 
-  // Estampado y estilo se guardan juntos; la búsqueda los usa para los estampados y la ocasión.
-  async function cambiarEstilo(cambios) {
-    if (cambiando) return;
-    const nuevo = { estampado: prenda.estampado, estilo: prenda.estilo, ...cambios };
+  // Todos los datos se guardan juntos (también precio, fecha de compra y temporada).
+  async function guardarCambios() {
     establecerCambiando(true);
     establecerError(null);
     try {
-      establecerPrenda(await cambiarEstiloPrenda(prenda.id, nuevo.estampado, nuevo.estilo));
-      vibrar.seleccion();
+      establecerPrenda(await editarPrenda(prenda.id, datosDe(formulario.valores)));
+      establecerEditando(false);
+      vibrar.exito();
     } catch (e) {
       establecerError(e.message);
     } finally {
       establecerCambiando(false);
+    }
+  }
+
+  async function quitarFondo() {
+    establecerQuitandoFondo(true);
+    establecerError(null);
+    try {
+      establecerPrenda(await quitarFondoPrenda(prenda.id));
+      vibrar.exito();
+    } catch (e) {
+      establecerError(e.message);
+    } finally {
+      establecerQuitandoFondo(false);
     }
   }
 
@@ -135,7 +157,18 @@ export default function PantallaPrenda() {
     prenda.estampado !== 'liso' && ETIQUETA_ESTAMPADO[prenda.estampado]?.toLowerCase(),
     `abrigo ${NIVELES_ABRIGO[prenda.nivel_abrigo - 1].etiqueta.slice(2).toLowerCase()} (${prenda.nivel_abrigo} de 5)`,
     prenda.impermeable && 'impermeable',
+    prenda.temporada && ETIQUETA_TEMPORADA[prenda.temporada]?.toLowerCase(),
   ];
+  const compra = [
+    prenda.precio_compra != null && `$${Number(prenda.precio_compra).toLocaleString('es-MX')}`,
+    prenda.fecha_adquisicion && `comprada el ${prenda.fecha_adquisicion}`,
+  ].filter(Boolean);
+  const dias = prenda.uso?.dias_sin_usar ?? null;
+  const usoTexto = [
+    prenda.uso && (prenda.uso.veces ? `Usada ${prenda.uso.veces} ${prenda.uso.veces === 1 ? 'vez' : 'veces'}` : 'Todavía sin usar'),
+    dias != null && (dias <= 0 ? 'la última hoy' : dias === 1 ? 'la última ayer' : `la última hace ${dias} días`),
+    prenda.costo_por_uso != null && `$${prenda.costo_por_uso.toLocaleString('es-MX')} por puesta`,
+  ].filter(Boolean);
 
   return (
     <ScrollView style={estilos.pantalla} contentContainerStyle={estilos.contenido}>
@@ -144,16 +177,29 @@ export default function PantallaPrenda() {
           <Image
             source={{ uri: urlImagen(prenda.url_imagen) }}
             style={estilos.foto}
-            contentFit="cover"
+            contentFit={prenda.sin_fondo ? 'contain' : 'cover'}
             transition={200}
           />
           <View style={[estilos.muestraFoto, { backgroundColor: HEX_COLOR[prenda.color_principal] }]} />
         </View>
 
         <Text style={estilos.nombre}>
-          {nombreDePrenda(prenda)} {ETIQUETA_COLOR[prenda.color_principal].toLowerCase()}
+          {nombreConColor(prenda)}
         </Text>
         <Text style={[texto.detalle, { textAlign: 'center' }]}>{detalles.filter(Boolean).join(', ')}</Text>
+        {compra.length > 0 && <Text style={[texto.nota, { textAlign: 'center' }]}>{compra.join(' · ')}</Text>}
+        {usoTexto.length > 0 && <Text style={[texto.nota, { textAlign: 'center' }]}>{usoTexto.join(' · ')}</Text>}
+        {!prenda.sin_fondo && (
+          <View style={{ marginTop: espacio.m, alignSelf: 'stretch' }}>
+            <Boton
+              texto={quitandoFondo ? 'Quitando el fondo…' : 'Quitar el fondo de la foto'}
+              icono={IconoIA}
+              secundario
+              alPresionar={quitarFondo}
+              cargando={quitandoFondo}
+            />
+          </View>
+        )}
       </Aparecer>
 
       {/* LIMPIEZA de datos: aviso cuando los datos o la foto de la prenda conviene revisarlos */}
@@ -176,25 +222,31 @@ export default function PantallaPrenda() {
         {cambiando ? 'Guardando…' : EXPLICACION_ESTADO[prenda.estado]}
       </Text>
 
-      <Selector
-        titulo="Estampado"
-        opciones={ESTAMPADOS}
-        seleccionado={prenda.estampado}
-        alCambiar={(estampado) => estampado !== prenda.estampado && cambiarEstilo({ estampado })}
-      />
-      <Selector
-        titulo="Estilo"
-        opciones={ESTILOS}
-        seleccionado={prenda.estilo}
-        alCambiar={(estilo) => estilo !== prenda.estilo && cambiarEstilo({ estilo })}
-      />
-      <Boton
-        texto={detectando ? 'Mirando la foto…' : 'Detectar estampado y estilo con IA'}
-        icono={IconoIA}
-        secundario
-        alPresionar={detectarConIA}
-        cargando={detectando}
-      />
+      {/* Editar todos los datos: si la IA se equivocó, aquí se corrige (también precio y fecha de compra) */}
+      {editando ? (
+        <View style={estilos.edicion}>
+          <FormularioPrenda valores={formulario.valores} alCambiar={formulario.cambiar} conCompra />
+          <Boton
+            texto="Guardar cambios"
+            icono={IconoPalomita}
+            alPresionar={guardarCambios}
+            cargando={cambiando}
+            deshabilitado={faltaAlgo(formulario.valores)}
+          />
+          <Boton texto="Cancelar" secundario alPresionar={() => establecerEditando(false)} />
+        </View>
+      ) : (
+        <View style={{ gap: espacio.s }}>
+          <Boton texto="Editar datos" icono={IconoEditar} secundario alPresionar={abrirEdicion} />
+          <Boton
+            texto={detectando ? 'Mirando la foto…' : 'Detectar estampado y estilo con IA'}
+            icono={IconoIA}
+            secundario
+            alPresionar={detectarConIA}
+            cargando={detectando}
+          />
+        </View>
+      )}
       <View style={{ height: espacio.xl }} />
 
       {error && (
@@ -233,6 +285,7 @@ const useEstilos = crearEstilos(({ colores, texto }) => ({
   },
   nombre: { ...texto.titulo, textAlign: 'center', marginTop: espacio.m },
   error: { ...texto.detalle, color: colores.error, marginBottom: espacio.m },
+  edicion: { gap: espacio.s, padding: espacio.m, borderRadius: radio.l, borderWidth: 1, borderColor: colores.borde },
   // LIMPIEZA de datos
   aviso: {
     flexDirection: 'row',

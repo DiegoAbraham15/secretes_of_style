@@ -1,4 +1,4 @@
-// Tomar o elegir una foto, recortarla a 3:4 y reducirla antes de subirla. La usan Nueva prenda y Tu foto.
+// Tomar o elegir fotos, recortarlas a 3:4 y reducirlas antes de subirlas. Las usan Nueva prenda, Varias prendas y Tu foto.
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -36,4 +36,30 @@ export async function elegirFoto(desdeCamara, recortar = true) {
   } catch {
     throw new Error('No se pudo preparar la foto. Intenta con otra.');
   }
+}
+
+// Varias fotos de la galería a la vez (sin recorte: el selector múltiple no lo permite). Devuelve las uris ya
+// reducidas, en el orden en que se eligieron, o [] si la persona canceló.
+export async function elegirFotos(limite = 20) {
+  const permiso = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!permiso.granted) {
+    throw new Error('Da permiso de fotos en los ajustes del teléfono para agregar tus prendas.');
+  }
+  const resultado = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    allowsMultipleSelection: true,
+    selectionLimit: limite,
+    orderedSelection: true,
+    quality: 1,
+  });
+  if (resultado.canceled) return [];
+  const uris = [];
+  for (const foto of resultado.assets) {
+    try {
+      uris.push(await reducirFoto(foto));
+    } catch {
+      // una foto que no se pudo preparar se salta; las demás siguen
+    }
+  }
+  return uris;
 }

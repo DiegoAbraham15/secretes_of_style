@@ -5,7 +5,7 @@ import { Platform } from 'react-native';
 
 // Usa EXPO_PUBLIC_URL_API si existe; si no, la IP de la computadora que sirve la app, puerto 8000.
 const hostMetro = Constants.expoConfig?.hostUri?.split(':')[0] ?? 'localhost';
-export const URL_API = process.env.EXPO_PUBLIC_URL_API ?? `http://${hostMetro}:8000`;
+const URL_API = process.env.EXPO_PUBLIC_URL_API ?? `http://${hostMetro}:8000`;
 
 export const urlImagen = (ruta) => `${URL_API}${ruta}`;
 
@@ -102,13 +102,40 @@ export async function subirPrenda(datos) {
 
 export const obtenerPrenda = (prendaId) => peticion(`/api/prendas/${prendaId}`);
 
+// ---------- Digitalización: borradores que la IA y el motor procesan en segundo plano ----------
+
+// Sube una foto: el servidor responde de inmediato y la procesa (IA, quitar fondo, color y temporada).
+export async function crearBorrador(uriImagen) {
+  const formulario = await formularioConImagen(uriImagen, 'prenda.jpg');
+  return peticion('/api/prendas/borradores', { method: 'POST', body: formulario });
+}
+
+// El link de una tienda o de una imagen: baja la foto, el nombre y el precio.
+export const importarDesdeUrl = (url) => peticion('/api/prendas/borradores/url', enviar('POST', { url }));
+
+export const listarBorradores = () => peticion('/api/prendas/borradores');
+
+export const obtenerBorrador = (borradorId) => peticion(`/api/prendas/borradores/${borradorId}`);
+
+export const reintentarBorrador = (borradorId) =>
+  peticion(`/api/prendas/borradores/${borradorId}/reintentar`, { method: 'POST' });
+
+// Con los datos revisados, el borrador se vuelve una prenda del armario.
+export const confirmarBorrador = (borradorId, datos) =>
+  peticion(`/api/prendas/borradores/${borradorId}/confirmar`, enviar('POST', datos));
+
+export const descartarBorrador = (borradorId) =>
+  peticion(`/api/prendas/borradores/${borradorId}`, { method: 'DELETE' });
+
+// Corrige cualquier dato de una prenda (también precio, fecha de compra y temporada).
+export const editarPrenda = (prendaId, cambios) => peticion(`/api/prendas/${prendaId}`, enviar('PATCH', cambios));
+
+// Para las prendas de antes: el motor les quita el fondo.
+export const quitarFondoPrenda = (prendaId) => peticion(`/api/prendas/${prendaId}/quitar-fondo`, { method: 'POST' });
+
 // estado: 'disponible', 'en_lavado' o 'archivada'.
 export const cambiarEstadoPrenda = (prendaId, estado) =>
   peticion(`/api/prendas/${prendaId}/estado`, enviar('PATCH', { estado }));
-
-// Corrige el estampado y el estilo (las prendas registradas antes de la IA quedaron como lisas y casuales).
-export const cambiarEstiloPrenda = (prendaId, estampado, estilo) =>
-  peticion(`/api/prendas/${prendaId}/estilo`, enviar('PATCH', { estampado, estilo }));
 
 // La IA vuelve a mirar la foto guardada y actualiza el estampado y el estilo.
 export const detectarEstiloPrenda = (prendaId) =>
@@ -125,6 +152,11 @@ export const revisarPrenda = (prendaId) => peticion(`/api/prendas/${prendaId}/re
 export const obtenerRecomendaciones = (prendaBaseId, latitud, longitud, ocasion) =>
   peticion('/api/recomendaciones', enviar('POST', { prenda_base_id: prendaBaseId, latitud, longitud, ocasion }));
 
+// El look de hoy sin elegir prenda base: A* con todas tus partes de arriba, tus gustos y sin repetir lo de los
+// últimos días. Responde como obtenerRecomendaciones, con una sola sugerencia y del_dia: true.
+export const obtenerLookDelDia = (latitud, longitud, ocasion) =>
+  peticion('/api/recomendaciones/dia', enviar('POST', { latitud, longitud, ocasion, fecha: fechaDeHoy() }));
+
 // Por qué funciona un atuendo, redactado por la IA con los hechos de la lógica.
 export const explicarAtuendo = (sugerencia, latitud, longitud, ocasion) =>
   peticion(
@@ -134,6 +166,30 @@ export const explicarAtuendo = (sugerencia, latitud, longitud, ocasion) =>
 
 // El cuestionario de estilo; lo que no se contesta queda sin preferencia.
 export const guardarPreferencias = (respuestas) => peticion('/api/preferencias', enviar('PUT', respuestas));
+
+// ---------- Colorimetría personal ----------
+
+export const obtenerPreguntasColor = () => peticion('/api/colorimetria/preguntas');
+
+// El diagnóstico guardado, o null.
+export const obtenerColorimetria = () => peticion('/api/colorimetria');
+
+export const contestarColorimetria = (respuestas) =>
+  peticion('/api/colorimetria/cuestionario', enviar('POST', { respuestas }));
+
+// Una selfie (uri) o, con uri null, la foto del probador. La foto no se guarda: solo los colores medidos.
+export async function analizarSelfie(uriImagen) {
+  const formulario = uriImagen ? await formularioConImagen(uriImagen, 'selfie.jpg') : new FormData();
+  if (!uriImagen) formulario.append('usar_foto_probador', 'true');
+  return peticion('/api/colorimetria/selfie', { method: 'POST', body: formulario });
+}
+
+export const priorizarColorimetria = (priorizar) => peticion('/api/colorimetria', enviar('PATCH', { priorizar }));
+
+export const borrarColorimetria = () => peticion('/api/colorimetria', { method: 'DELETE' });
+
+// Las respuestas actuales, para editarlas en "Tus gustos".
+export const obtenerPreferencias = () => peticion('/api/preferencias');
 
 // Poner o quitar el corazón: el servidor reentrena el perceptrón de la persona.
 export const votarAtuendo = (sugerencia, meGusta) =>
@@ -155,6 +211,25 @@ export const guardarAtuendo = (sugerencia, reporteClima) =>
 export const listarAtuendos = () => peticion('/api/atuendos');
 
 export const eliminarAtuendo = (atuendoId) => peticion(`/api/atuendos/${atuendoId}`, { method: 'DELETE' });
+
+// ---------- "Me lo puse hoy" ----------
+
+// El día del teléfono (AAAA-MM-DD). El servidor está en UTC: en México, desde las 18 h ya sería mañana.
+export function fechaDeHoy(diasAtras = 0) {
+  const fecha = new Date();
+  fecha.setDate(fecha.getDate() - diasAtras);
+  const dos = (n) => String(n).padStart(2, '0');
+  return `${fecha.getFullYear()}-${dos(fecha.getMonth() + 1)}-${dos(fecha.getDate())}`;
+}
+
+// Lo que te pusiste hoy (si ya había algo hoy, lo reemplaza). Un look completo cuenta como corazón.
+export const registrarUso = (prendaIds) =>
+  peticion('/api/usos', enviar('POST', { prenda_ids: prendaIds, fecha: fechaDeHoy() }));
+
+// Los días registrados desde esa fecha (AAAA-MM-DD), del más reciente al más viejo.
+export const listarUsos = (desde) => peticion(`/api/usos?desde=${desde}`);
+
+export const quitarUso = (fecha) => peticion(`/api/usos/${fecha}`, { method: 'DELETE' });
 
 // ---------- Probador virtual ----------
 
@@ -182,4 +257,81 @@ export const fotoCuerpo = (versionFoto) => imagenPrivada(`/api/perfil/foto?v=${v
 
 // ---------- Estadísticas ----------
 
-export const obtenerEstadisticas = () => peticion('/api/estadisticas');
+// Con la fecha del teléfono, para contar bien los últimos 30 días de "Me lo puse".
+export const obtenerEstadisticas = () => peticion(`/api/estadisticas?fecha=${fechaDeHoy()}`);
+
+// Grupos de ropa (K-means), mapa del armario (PCA) y prendas que no encajan (segmentación, atípicos y PCA).
+export const obtenerGruposDelArmario = () => peticion('/api/prendas/grupos');
+
+// Qué tan bien ordena cada sistema tus looks con corazón (y cómo le fue a la CNN al entrenarse).
+export const obtenerEvaluacionIA = () => peticion('/api/votos/evaluacion');
+
+// ---------- Modo viaje ----------
+
+export const buscarLugares = (nombre) => peticion(`/api/viaje/lugares?nombre=${encodeURIComponent(nombre)}`);
+
+// Un look por día con el pronóstico del destino y la maleta. salida: en cuántos días se va (0 = hoy).
+export const planearViaje = (lugar, salida, dias, ocasion) =>
+  peticion(
+    '/api/viaje',
+    enviar('POST', {
+      latitud: lugar.latitud,
+      longitud: lugar.longitud,
+      lugar: lugar.nombre,
+      salida,
+      dias,
+      ocasion,
+    }),
+  );
+
+// ---------- Reto de la semana: rescatar una prenda olvidada ----------
+
+// El reto de esta semana (con la fecha del teléfono), o null si no hay prendas olvidadas.
+export const obtenerReto = () => peticion(`/api/reto?fecha=${fechaDeHoy()}`);
+
+export const cambiarReto = () => peticion(`/api/reto/cambiar?fecha=${fechaDeHoy()}`, { method: 'POST' });
+
+export const omitirReto = () => peticion(`/api/reto/omitir?fecha=${fechaDeHoy()}`, { method: 'POST' });
+
+// ---------- Cápsulas de guardarropa ----------
+
+// escenario: 'mensual' o 'viaje' (con lugar, salida y días). No guarda nada.
+export const generarCapsula = (datos) => peticion('/api/capsulas/generar', enviar('POST', datos));
+
+export const guardarCapsula = (capsula) => peticion('/api/capsulas', enviar('POST', capsula));
+
+export const listarCapsulas = () => peticion('/api/capsulas');
+
+export const obtenerCapsula = (capsulaId) => peticion(`/api/capsulas/${capsulaId}`);
+
+// Lo que ya va en la maleta (checklist).
+export const marcarEmpacadas = (capsulaId, empacadas) =>
+  peticion(`/api/capsulas/${capsulaId}`, enviar('PATCH', { empacadas }));
+
+export const eliminarCapsula = (capsulaId) => peticion(`/api/capsulas/${capsulaId}`, { method: 'DELETE' });
+
+// ---------- Tiendas: prendas que te gustaron en una tienda ----------
+
+// La IA ve la foto y la prenda queda en tu lista con un link por tienda. para: mujer, hombre o sin_especificar.
+export async function buscarEnTiendas(uriImagen, para) {
+  const formulario = await formularioConImagen(uriImagen, 'tienda.jpg');
+  formulario.append('para', para);
+  return peticion('/api/deseos', { method: 'POST', body: formulario });
+}
+
+export const listarDeseos = () => peticion('/api/deseos');
+
+// Corregir qué se busca (si la IA se equivocó) o para quién es.
+export const cambiarDeseo = (deseoId, cambios) => peticion(`/api/deseos/${deseoId}`, enviar('PATCH', cambios));
+
+export const eliminarDeseo = (deseoId) => peticion(`/api/deseos/${deseoId}`, { method: 'DELETE' });
+
+// La IA vuelve a mirar la foto (marca, modelo, estampado) y rehace la búsqueda de la misma prenda.
+export const analizarDeseo = (deseoId) => peticion(`/api/deseos/${deseoId}/analizar`, { method: 'POST' });
+
+// Google Cloud Vision busca en internet la prenda exacta de la foto (si el servidor tiene la clave).
+export const buscarDeseoPorImagen = (deseoId) =>
+  peticion(`/api/deseos/${deseoId}/buscar-por-imagen`, { method: 'POST' });
+
+// ¿Vale la pena comprarla? Cuántos looks arma con tu ropa, comparada con lo que ya tienes.
+export const valeLaPena = (deseoId) => peticion(`/api/deseos/${deseoId}/vale-la-pena`);

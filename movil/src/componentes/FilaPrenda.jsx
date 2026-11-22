@@ -2,20 +2,18 @@
 // el estado con un punto de color (verde si está disponible) y una flecha a la derecha.
 // conEstado: false quita el estado (al elegir prenda base todas están disponibles). seleccionada: palomita
 // en lugar de la flecha. accion: texto en lugar de la flecha (p. ej. "Cambiar"). Va dentro de GrupoPrendas.
-import { Image } from 'expo-image';
 import { Text, View } from 'react-native';
 
-import { urlImagen } from '../api';
 import {
-  ETIQUETA_COLOR,
   ETIQUETA_ESTADO,
   ETIQUETA_ESTAMPADO,
   ETIQUETA_ESTILO,
   HEX_COLOR,
-  nombreDePrenda,
+  nombreConColor,
 } from '../catalogos';
 import { IconoIr, IconoPalomita } from '../iconos';
 import { Presionable } from '../movimiento';
+import { FotoPrenda } from './FotoPrenda';
 import { crearEstilos, espacio, fuentes, radio, useTema } from '../tema';
 
 const TAMAÑO_FOTO = 64;
@@ -25,7 +23,7 @@ export function FilaPrenda({ prenda, ultima = false, conEstado = true, seleccion
   const estilos = useEstilos();
   const disponible = prenda.estado === 'disponible';
   const colorEstado = { disponible: colores.exito, en_lavado: colores.acento }[prenda.estado] ?? colores.bordeControl;
-  const nombre = `${nombreDePrenda(prenda)} ${ETIQUETA_COLOR[prenda.color_principal].toLowerCase()}`;
+  const nombre = nombreConColor(prenda);
   const detalle = [
     `Abrigo ${prenda.nivel_abrigo} de 5`,
     ETIQUETA_ESTAMPADO[prenda.estampado]?.toLowerCase(),
@@ -44,13 +42,7 @@ export function FilaPrenda({ prenda, ultima = false, conEstado = true, seleccion
       accessibilityState={{ selected: seleccionada }}
       style={[estilos.fila, !ultima && estilos.separador]}>
       <View>
-        <Image
-          source={{ uri: urlImagen(prenda.url_imagen) }}
-          style={[estilos.foto, !disponible && { opacity: 0.5 }]}
-          contentFit="cover"
-          cachePolicy="memory-disk"
-          transition={200}
-        />
+        <FotoPrenda prenda={prenda} style={[estilos.foto, !disponible && { opacity: 0.5 }]} />
         <View style={[estilos.muestra, { backgroundColor: HEX_COLOR[prenda.color_principal] }]} />
       </View>
 
@@ -80,10 +72,9 @@ export function FilaPrenda({ prenda, ultima = false, conEstado = true, seleccion
   );
 }
 
-const useEstilos = crearEstilos(({ colores, texto }) => ({
+const useEstilos = crearEstilos(({ colores, texto, separador }) => ({
   fila: { flexDirection: 'row', alignItems: 'center', gap: espacio.s + 4, paddingVertical: espacio.s + 4 },
-  // Línea fina entre una fila y la siguiente.
-  separador: { borderBottomWidth: 1, borderBottomColor: colores.borde },
+  separador, // línea fina entre una fila y la siguiente (tema.js)
   foto: {
     width: TAMAÑO_FOTO,
     height: TAMAÑO_FOTO,

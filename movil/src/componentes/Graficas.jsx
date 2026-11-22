@@ -13,8 +13,9 @@ const ALTO_COLUMNAS = 96;
 
 const porcentaje = (valor, total) => Math.round((100 * valor) / (total || 1));
 
-// "12 de 36 prendas, 33 %": lo que se lee al tocar una barra o una columna.
-const detalleDe = (dato, total, unidad) => `${dato.valor} de ${total} ${unidad}, ${porcentaje(dato.valor, total)} %`;
+// "12 de 36 prendas, 33 %": lo que se lee al tocar una barra o una columna. Un dato puede traer su propio detalle.
+const detalleDe = (dato, total, unidad) =>
+  dato.detalle ?? `${dato.valor} de ${total} ${unidad}, ${porcentaje(dato.valor, total)} %`;
 
 // Va de 0 a 1 cuando llegan los datos: las barras crecen desde su base. Se omite con "Reducir movimiento".
 function useCrecer(repeticion) {
@@ -69,7 +70,7 @@ export function Indicadores({ filas }) {
     <View style={estilos.bloque}>
       {filas.map((fila, i) => (
         <View
-          key={fila.titulo}
+          key={`${fila.titulo}-${i}`}
           style={[estilos.indicador, i < filas.length - 1 && estilos.separador]}
           accessible
           accessibilityLabel={`${fila.detalle}: ${fila.titulo}, ${fila.valor}`}>
@@ -112,7 +113,7 @@ export function Seccion({ titulo, nota, children }) {
 
 // ---------- Barras horizontales ----------
 
-// datos: [{ etiqueta, valor, hex? }], de mayor a menor. hex: círculo con el color de la prenda junto al nombre.
+// datos: [{ etiqueta, valor, hex?, detalle? }], de mayor a menor. hex: círculo con el color de la prenda junto al nombre.
 // La barra más larga es la mayor; tocar una fila muestra su detalle. Con limite, el resto se abre con un enlace.
 export function GraficaBarras({ datos, unidad, repeticion, limite = datos.length }) {
   const { colores, texto } = useTema();
@@ -236,20 +237,19 @@ export function GraficaColumnas({ datos, unidad, repeticion, inicio, fin }) {
   );
 }
 
-const useEstilos = crearEstilos(({ colores, texto }) => ({
+const useEstilos = crearEstilos(({ colores, texto, bloque, separador }) => ({
   resumen: { padding: espacio.m, borderRadius: radio.l, backgroundColor: colores.primarioSuave, gap: espacio.s },
   filaTotal: { flexDirection: 'row', alignItems: 'flex-end', gap: espacio.s + 4 },
   numeroTotal: { fontFamily: fuentes.display, fontSize: 88, lineHeight: 96, letterSpacing: -3, color: colores.primario },
   textoTotal: { ...texto.cuerpo, flex: 1, paddingBottom: espacio.m },
   hallazgo: { fontFamily: fuentes.displayItalica, fontSize: 20, lineHeight: 28, color: colores.texto },
 
-  // Bloque suave donde van las filas, igual que en el Armario.
-  bloque: { paddingHorizontal: espacio.m, paddingVertical: espacio.xs, borderRadius: radio.l, backgroundColor: colores.superficieSuave },
+  bloque, // bloque suave donde van las filas, igual que en el Armario (tema.js)
   seccion: { gap: espacio.s + 4 },
   cabeceraSeccion: { flexDirection: 'row', alignItems: 'baseline', gap: espacio.s },
 
   indicador: { flexDirection: 'row', alignItems: 'center', gap: espacio.s + 4, paddingVertical: espacio.s + 4 },
-  separador: { borderBottomWidth: 1, borderBottomColor: colores.borde },
+  separador,
   cuadro: {
     width: 40,
     height: 40,

@@ -4,20 +4,23 @@
 // etiqueta: aviso sobre las fotos (p. ej. "La mejor opción"). destacado: resalta la tarjeta.
 // alExplicar: botón "¿Por qué?"; explicacion ({ texto } o { error }) es lo que redactó la IA.
 // conCorazon y alCorazon: el corazón con el que la persona le enseña sus gustos a la app; errorVoto si no se guardó.
-// Al final va el probador virtual ("Probármelo"), que viste la foto de la persona con el look.
-import { Image } from 'expo-image';
+// El corazón, "Guardar" y "¿Por qué?" solo aparecen si llega su función (el modo viaje muestra el look sin ellos).
+// etiquetaBase: lo que dice junto a la prenda base ("Tu base"; "De la tienda" en "¿Vale la pena?").
+// titulo y cuando cambian "Look N" y "ventajas para hoy" (p. ej. "Día 2" y "ese día" en el viaje).
+// alUsar: "Me lo puse hoy" (usado lo marca; tocarlo otra vez lo deshace).
+// Al final va el probador virtual ("Probármelo"), que viste la foto de la persona con el look; conProbador={false}
+// lo quita (p. ej. en "¿Vale la pena?", donde una prenda todavía no es tuya).
 import { Pressable, Text, View } from 'react-native';
 
-import { urlImagen } from '../api';
-import { ETIQUETA_COLOR, HEX_COLOR, nombreDePrenda, ORDEN_CUERPO } from '../catalogos';
-import { IconoCorazon, IconoGuardados, IconoIA, IconoPalomita, IconoVentaja } from '../iconos';
+import { HEX_COLOR, nombreConColor, ORDEN_CUERPO } from '../catalogos';
+import { IconoCorazon, IconoGuardados, IconoIA, IconoMeLoPuse, IconoPalomita, IconoVentaja } from '../iconos';
 import { crearEstilos, espacio, fuentes, presionado, radio, tactil, tamañoIcono, useTema } from '../tema';
 import { Boton } from './Boton';
+import { FotoPrenda } from './FotoPrenda';
 import { Probador } from './Probador';
 
-const nombreConColor = (prenda) => `${nombreDePrenda(prenda)} ${ETIQUETA_COLOR[prenda.color_principal].toLowerCase()}`;
 
-function Prenda({ prenda, motivo, esBase }) {
+function Prenda({ prenda, motivo, esBase, etiquetaBase }) {
   const { colores, texto } = useTema();
   const estilos = useEstilos();
   return (
@@ -27,7 +30,7 @@ function Prenda({ prenda, motivo, esBase }) {
         <Text style={estilos.nombre}>{nombreConColor(prenda)}</Text>
         {motivo && <Text style={texto.nota}>{motivo[0].toUpperCase() + motivo.slice(1)}</Text>}
       </View>
-      {esBase && <Text style={[texto.nota, { color: colores.primario }]}>Tu base</Text>}
+      {esBase && <Text style={[texto.nota, { color: colores.primario }]}>{etiquetaBase}</Text>}
     </View>
   );
 }
@@ -35,6 +38,8 @@ function Prenda({ prenda, motivo, esBase }) {
 export function Perchero({
   sugerencia,
   numero,
+  titulo = `Look ${numero}`,
+  cuando = 'hoy',
   etiqueta,
   destacado = false,
   guardada,
@@ -46,6 +51,11 @@ export function Perchero({
   conCorazon,
   alCorazon,
   errorVoto,
+  alUsar,
+  usado = false,
+  usando = false,
+  conProbador = true,
+  etiquetaBase = 'Tu base',
 }) {
   const { colores, texto } = useTema();
   const estilos = useEstilos();
@@ -61,15 +71,7 @@ export function Perchero({
     <View style={[estilos.tarjeta, destacado && estilos.tarjetaDestacada]}>
       <View style={estilos.fotos}>
         {ordenadas.map(({ prenda }) => (
-          <Image
-            key={prenda.id}
-            source={{ uri: urlImagen(prenda.url_imagen) }}
-            style={estilos.foto}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-            transition={200}
-            accessibilityLabel={nombreConColor(prenda)}
-          />
+          <FotoPrenda key={prenda.id} prenda={prenda} style={estilos.foto} accessibilityLabel={nombreConColor(prenda)} />
         ))}
         {etiqueta && <Text style={estilos.etiqueta}>{etiqueta}</Text>}
       </View>
@@ -78,26 +80,42 @@ export function Perchero({
         <View style={estilos.cabecera}>
           <View style={{ flex: 1 }}>
             <Text style={estilos.look} accessibilityRole="header">
-              Look {numero}
+              {titulo}
             </Text>
             <Text style={texto.nota}>
               {ventajas.length > 0
-                ? `${ventajas.length} ${ventajas.length === 1 ? 'ventaja' : 'ventajas'} para hoy`
+                ? `${ventajas.length} ${ventajas.length === 1 ? 'ventaja' : 'ventajas'} para ${cuando}`
                 : 'Sin ventajas extra'}
             </Text>
+            {/* Colorimetría: si los colores cerca del rostro están en la paleta de la persona */}
+            {sugerencia.colorimetria && sugerencia.colorimetria.nivel !== 'neutral' && (
+              <View style={estilos.insignia} accessibilityLabel={sugerencia.colorimetria.detalle}>
+                <View
+                  style={[
+                    estilos.puntoInsignia,
+                    { backgroundColor: sugerencia.colorimetria.nivel === 'favorece' ? colores.exito : colores.acento },
+                  ]}
+                />
+                <Text style={texto.nota}>
+                  {sugerencia.colorimetria.nivel === 'favorece' ? 'Va con tus colores' : 'Lejos de tu paleta'}
+                </Text>
+              </View>
+            )}
           </View>
-          <Pressable
-            onPress={alCorazon}
-            accessibilityRole="button"
-            accessibilityLabel="Me gusta este atuendo"
-            accessibilityState={{ selected: conCorazon }}
-            style={({ pressed }) => [estilos.corazon, conCorazon && estilos.corazonActivo, pressed && presionado]}>
-            <IconoCorazon
-              color={conCorazon ? colores.primario : colores.textoSecundario}
-              size={tamañoIcono.m}
-              weight={conCorazon ? 'fill' : 'regular'}
-            />
-          </Pressable>
+          {alCorazon && (
+            <Pressable
+              onPress={alCorazon}
+              accessibilityRole="button"
+              accessibilityLabel="Me gusta este atuendo"
+              accessibilityState={{ selected: conCorazon }}
+              style={({ pressed }) => [estilos.corazon, conCorazon && estilos.corazonActivo, pressed && presionado]}>
+              <IconoCorazon
+                color={conCorazon ? colores.primario : colores.textoSecundario}
+                size={tamañoIcono.m}
+                weight={conCorazon ? 'fill' : 'regular'}
+              />
+            </Pressable>
+          )}
         </View>
         {errorVoto && (
           <Text style={[texto.detalle, { color: colores.error }]} accessibilityRole="alert">
@@ -107,7 +125,7 @@ export function Perchero({
 
         <View style={estilos.prendas}>
           {ordenadas.map((elemento) => (
-            <Prenda key={elemento.prenda.id} {...elemento} esBase={elemento === base} />
+            <Prenda key={elemento.prenda.id} {...elemento} esBase={elemento === base} etiquetaBase={etiquetaBase} />
           ))}
         </View>
 
@@ -137,31 +155,45 @@ export function Perchero({
           </Text>
         )}
 
-        <View style={estilos.acciones}>
-          <View style={{ flex: 1 }}>
-            <Boton
-              texto={guardada ? 'Guardado' : 'Guardar'}
-              icono={guardada ? IconoPalomita : IconoGuardados}
-              secundario={guardada || !destacado}
-              alPresionar={alGuardar}
-              cargando={guardando}
-              deshabilitado={guardada}
-            />
+        {(alGuardar || alExplicar) && (
+          <View style={estilos.acciones}>
+            {alGuardar && (
+              <View style={{ flex: 1 }}>
+                <Boton
+                  texto={guardada ? 'Guardado' : 'Guardar'}
+                  icono={guardada ? IconoPalomita : IconoGuardados}
+                  secundario={guardada || !destacado}
+                  alPresionar={alGuardar}
+                  cargando={guardando}
+                  deshabilitado={guardada}
+                />
+              </View>
+            )}
+            {alExplicar && !explicacion?.texto && (
+              <View style={{ flex: 1 }}>
+                <Boton
+                  texto={explicando ? 'Pensando…' : '¿Por qué?'}
+                  icono={IconoIA}
+                  secundario
+                  alPresionar={alExplicar}
+                  cargando={explicando}
+                />
+              </View>
+            )}
           </View>
-          {!explicacion?.texto && (
-            <View style={{ flex: 1 }}>
-              <Boton
-                texto={explicando ? 'Pensando…' : '¿Por qué?'}
-                icono={IconoIA}
-                secundario
-                alPresionar={alExplicar}
-                cargando={explicando}
-              />
-            </View>
-          )}
-        </View>
+        )}
 
-        <Probador sugerencia={sugerencia} />
+        {alUsar && (
+          <Boton
+            texto={usado ? 'Te lo pusiste hoy' : 'Me lo puse hoy'}
+            icono={usado ? IconoPalomita : IconoMeLoPuse}
+            secundario
+            alPresionar={alUsar}
+            cargando={usando}
+          />
+        )}
+
+        {conProbador && <Probador sugerencia={sugerencia} />}
       </View>
     </View>
   );
@@ -199,6 +231,8 @@ const useEstilos = crearEstilos(({ colores, texto, tarjeta }) => ({
     backgroundColor: colores.superficieSuave,
   },
   corazonActivo: { backgroundColor: colores.primarioSuave },
+  insignia: { flexDirection: 'row', alignItems: 'center', gap: espacio.xs + 2, marginTop: 2 },
+  puntoInsignia: { width: 8, height: 8, borderRadius: 4 },
   look: { fontFamily: fuentes.displayItalica, fontSize: 32, lineHeight: 40, color: colores.texto },
 
   prendas: { gap: espacio.s + 4 },

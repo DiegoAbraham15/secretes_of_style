@@ -58,6 +58,13 @@ export const OCASIONES = [
   { valor: 'deporte', etiqueta: 'Deporte' },
 ];
 
+// Temporada: se propone sola con el nivel de abrigo (1–2, 3, 4–5) y se puede cambiar.
+export const TEMPORADAS = [
+  { valor: 'primavera_verano', etiqueta: 'Primavera y verano' },
+  { valor: 'todo_el_ano', etiqueta: 'Todo el año' },
+  { valor: 'otono_invierno', etiqueta: 'Otoño e invierno' },
+];
+
 // Solo las prendas disponibles entran en los atuendos.
 export const ESTADOS = [
   { valor: 'disponible', etiqueta: 'Disponible' },
@@ -73,10 +80,14 @@ export const ETIQUETA_CATEGORIA = comoDiccionario(CATEGORIAS, 'etiqueta');
 export const ETIQUETA_COLOR = comoDiccionario(COLORES, 'etiqueta');
 export const HEX_COLOR = comoDiccionario(COLORES, 'hex');
 export const ETIQUETA_ESTADO = comoDiccionario(ESTADOS, 'etiqueta');
+export const ETIQUETA_TEMPORADA = comoDiccionario(TEMPORADAS, 'etiqueta');
 export const ETIQUETA_ESTAMPADO = comoDiccionario(ESTAMPADOS, 'etiqueta');
 export const ETIQUETA_ESTILO = comoDiccionario(ESTILOS, 'etiqueta');
 
 export const nombreDePrenda = (prenda) => prenda.subcategoria || ETIQUETA_CATEGORIA[prenda.categoria];
+
+// "Tenis gris": el nombre con el color, como se muestra en listas, detalles y lectores de pantalla.
+export const nombreConColor = (prenda) => `${nombreDePrenda(prenda)} ${ETIQUETA_COLOR[prenda.color_principal].toLowerCase()}`;
 
 // Orden en que se muestran las prendas de un atuendo: de arriba abajo, como se usa la ropa.
 export const ORDEN_CUERPO = ['accesorio', 'abrigo', 'parte_superior', 'parte_inferior', 'calzado'];

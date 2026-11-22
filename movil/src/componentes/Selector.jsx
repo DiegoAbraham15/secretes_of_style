@@ -1,12 +1,19 @@
 // Selector de una sola opción: cada opción es una pastilla que se puede tocar (mínimo 44 pt de alto).
 // enLinea: las pastillas quedan en una sola fila que se desliza de lado.
 // etiquetaGrupo: nombre del grupo para el lector de pantalla, si el título va fuera del selector.
+import { useRef } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { crearEstilos, espacio, fuentes, presionado, radio } from '../tema';
 
 export function Selector({ titulo, etiquetaGrupo = titulo, opciones, seleccionado, alCambiar, enLinea = false, estilo }) {
   const estilos = useEstilos();
+  const fila = useRef(null);
+
+  // En una fila que se desliza, la opción elegida se lleva a la vista (p. ej. el color que propuso la IA).
+  const mostrarSiActiva = (activa) => (evento) => {
+    if (enLinea && activa) fila.current?.scrollTo({ x: Math.max(0, evento.nativeEvent.layout.x - espacio.m), animated: false });
+  };
 
   const pastillas = opciones.map((opcion) => {
     const activa = opcion.valor === seleccionado;
@@ -14,6 +21,7 @@ export function Selector({ titulo, etiquetaGrupo = titulo, opciones, seleccionad
       <Pressable
         key={String(opcion.valor)}
         onPress={() => alCambiar(opcion.valor)}
+        onLayout={mostrarSiActiva(activa)}
         accessibilityRole="radio"
         accessibilityLabel={opcion.etiqueta}
         accessibilityState={{ selected: activa, checked: activa }}
@@ -28,7 +36,7 @@ export function Selector({ titulo, etiquetaGrupo = titulo, opciones, seleccionad
     <View style={[{ marginBottom: espacio.l }, estilo]} accessibilityRole="radiogroup" accessibilityLabel={etiquetaGrupo}>
       {titulo && <Text style={estilos.titulo}>{titulo}</Text>}
       {enLinea ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={estilos.filaEnLinea}>
+        <ScrollView ref={fila} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={estilos.filaEnLinea}>
           {pastillas}
         </ScrollView>
       ) : (

@@ -35,8 +35,17 @@ export default function LayoutProtegido() {
       <Stack.Protected guard={cuestionarioListo}>
         <Stack.Screen name="(pestanas)" options={{ headerShown: false }} />
         <Stack.Screen name="nueva-prenda" options={{ ...modal, title: 'Nueva prenda' }} />
+        <Stack.Screen name="carga-masiva" options={{ ...modal, title: 'Varias prendas' }} />
+        <Stack.Screen name="importar" options={{ ...modal, title: 'Desde un link' }} />
         <Stack.Screen name="prenda/[id]" options={{ ...modal, title: 'Tu prenda' }} />
         <Stack.Screen name="tu-foto" options={{ ...modal, title: 'Tu foto' }} />
+        <Stack.Screen name="mis-gustos" options={{ ...modal, title: 'Tus gustos' }} />
+        <Stack.Screen name="colorimetria" options={{ ...modal, title: 'Tu colorimetría' }} />
+        <Stack.Screen name="viaje" options={{ ...modal, title: 'Tu viaje' }} />
+        <Stack.Screen name="capsula" options={{ ...modal, title: 'Cápsula de ropa' }} />
+        <Stack.Screen name="capsulas/[id]" options={{ ...modal, title: 'Tu cápsula' }} />
+        <Stack.Screen name="vale-la-pena" options={{ ...modal, title: '¿Vale la pena?' }} />
+        <Stack.Screen name="vista-previa" options={{ ...modal, title: 'Vista previa' }} />
       </Stack.Protected>
     </Stack>
   );

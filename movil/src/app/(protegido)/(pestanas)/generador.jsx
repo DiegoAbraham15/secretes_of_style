@@ -1,9 +1,20 @@
 import * as Location from 'expo-location';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 
-import { explicarAtuendo, guardarAtuendo, listarPrendas, obtenerRecomendaciones, votarAtuendo } from '../../../api';
+import {
+  explicarAtuendo,
+  fechaDeHoy,
+  guardarAtuendo,
+  listarPrendas,
+  listarUsos,
+  obtenerLookDelDia,
+  obtenerRecomendaciones,
+  quitarUso,
+  registrarUso,
+  votarAtuendo,
+} from '../../../api';
 import {
   CATEGORIAS,
   ETIQUETA_CATEGORIA,
@@ -11,12 +22,13 @@ import {
   UBICACION_RESPALDO,
   nombreDePrenda,
 } from '../../../catalogos';
+import { Boton } from '../../../componentes/Boton';
 import { Encabezado } from '../../../componentes/Encabezado';
 import { GrupoPrendas, POR_GRUPO } from '../../../componentes/GrupoPrendas';
 import { Perchero } from '../../../componentes/Perchero';
 import { Selector } from '../../../componentes/Selector';
 import { TarjetaClima } from '../../../componentes/TarjetaClima';
-import { IconoAviso } from '../../../iconos';
+import { IconoAviso, IconoCapsula, IconoSorprendeme, IconoViaje } from '../../../iconos';
 import { Aparecer, useReducirMovimiento, vibrar } from '../../../movimiento';
 import { crearEstilos, espacio, espacioBarra, fuentes, presionado, radio, tamañoIcono, useTema } from '../../../tema';
 
@@ -72,6 +84,8 @@ export default function PantallaGenerador() {
   const [explicando, establecerExplicando] = useState(null);
   const [votos, establecerVotos] = useState({}); // firma → 1 o -1, lo votado en esta pantalla
   const [erroresVoto, establecerErroresVoto] = useState({}); // firma → mensaje
+  const [usadoHoy, establecerUsadoHoy] = useState(null); // firma de lo que se registró hoy con "Me lo puse"
+  const [usando, establecerUsando] = useState(null); // firma que se está registrando
   const pantalla = useRef(null);
   const desplazar = useRef(false); // true desde que se elige una prenda hasta mostrar los atuendos
 
@@ -80,13 +94,19 @@ export default function PantallaGenerador() {
       listarPrendas({ estado: 'disponible' })
         .then(establecerPrendas)
         .catch((e) => establecerError(e.message));
+      // Lo que ya se marcó hoy (también desde Guardados), para pintar "Te lo pusiste hoy".
+      listarUsos(fechaDeHoy())
+        .then((usos) => {
+          const deHoy = usos.find((uso) => uso.fecha === fechaDeHoy());
+          establecerUsadoHoy(deHoy ? firmaDe(deHoy) : null);
+        })
+        .catch(() => {});
     }, []),
   );
 
-  async function generar(prendaBase, ocasionElegida = ocasion) {
+  // Pide los atuendos (con una prenda base o el look del día) y deja la pantalla lista para mostrarlos.
+  async function armar(pedir) {
     vibrar.seleccion();
-    establecerBase(prendaBase);
-    establecerEligiendo(false);
     establecerGuardadas([]);
     establecerExplicaciones({});
     establecerVotos({});
@@ -98,7 +118,7 @@ export default function PantallaGenerador() {
       // La ubicación se pide solo la primera vez y después se reutiliza.
       const donde = ubicacion ?? (await obtenerUbicacion());
       establecerUbicacion(donde);
-      establecerResultado(await obtenerRecomendaciones(prendaBase.id, donde.latitud, donde.longitud, ocasionElegida));
+      establecerResultado(await pedir(donde));
     } catch (e) {
       establecerResultado(null);
       establecerError(e.message);
@@ -107,11 +127,49 @@ export default function PantallaGenerador() {
     }
   }
 
-  // Con una prenda base ya elegida, cambiar la ocasión vuelve a armar los atuendos.
+  function generar(prendaBase, ocasionElegida = ocasion) {
+    establecerBase(prendaBase);
+    establecerEligiendo(false);
+    armar((donde) => obtenerRecomendaciones(prendaBase.id, donde.latitud, donde.longitud, ocasionElegida));
+  }
+
+  // "Sorpréndeme": la app elige todo, sin prenda base. Pedirlo otra vez da otra opción, porque el look que se
+  // mostró sin corazón pierde puntos.
+  function sorprender(ocasionElegida = ocasion) {
+    establecerBase(null);
+    establecerEligiendo(true);
+    armar((donde) => obtenerLookDelDia(donde.latitud, donde.longitud, ocasionElegida));
+  }
+
+  // Con atuendos en pantalla, cambiar la ocasión los vuelve a armar.
   function cambiarOcasion(nueva) {
     if (nueva === ocasion) return;
     establecerOcasion(nueva);
-    if (base) generar(base, nueva);
+    if (resultado?.del_dia) sorprender(nueva);
+    else if (base) generar(base, nueva);
+  }
+
+  // "Me lo puse hoy": un look por día (marcar otro lo reemplaza); tocarlo otra vez lo deshace. Si es un look
+  // completo, el servidor también le pone corazón.
+  async function usar(sugerencia) {
+    const firma = firmaDe(sugerencia);
+    establecerUsando(firma);
+    establecerError(null);
+    try {
+      if (usadoHoy === firma) {
+        await quitarUso(fechaDeHoy());
+        establecerUsadoHoy(null);
+      } else {
+        await registrarUso(sugerencia.elementos.map((e) => e.prenda.id));
+        establecerUsadoHoy(firma);
+        establecerVotos((actuales) => ({ ...actuales, [firma]: 1 }));
+        vibrar.exito();
+      }
+    } catch (e) {
+      establecerError(e.message);
+    } finally {
+      establecerUsando(null);
+    }
   }
 
   async function explicar(indice) {
@@ -195,12 +253,40 @@ export default function PantallaGenerador() {
 
   return (
     <View style={estilos.pantalla}>
-      <Encabezado titulo="Atuendos de hoy" />
+      <Encabezado
+        titulo="Atuendos de hoy"
+        accion={{ icono: IconoViaje, etiqueta: 'Armar la maleta de un viaje', alPresionar: () => router.push('/viaje') }}
+      />
       <ScrollView ref={pantalla} style={estilos.pantalla} contentContainerStyle={{ paddingBottom: espacioBarra }}>
         <Paso numero={1} titulo="Elige la ocasión" estilo={{ marginTop: espacio.m }} />
         <Selector opciones={OCASIONES} seleccionado={ocasion} alCambiar={cambiarOcasion} enLinea estilo={{ marginBottom: 0 }} />
 
-        <Paso numero={2} titulo="Elige tu prenda base" estilo={estilos.separacionPaso} />
+        {prendas.length > 0 && (
+          <View style={[estilos.margen, estilos.sorpresa]}>
+            <Text style={texto.detalle}>
+              ¿Sin tiempo? La app arma tu look de hoy con el clima, tus gustos y sin repetir lo que te pusiste estos
+              días.
+            </Text>
+            <Boton
+              texto={resultado?.del_dia ? 'Otra opción' : 'Sorpréndeme'}
+              icono={IconoSorprendeme}
+              secundario={Boolean(base)}
+              alPresionar={() => sorprender()}
+              cargando={generando && !base}
+            />
+            {/* Más formas de planear: la maleta día por día o una cápsula que arma muchos looks con pocas prendas */}
+            <View style={estilos.atajos}>
+              <View style={{ flex: 1 }}>
+                <Boton texto="Maleta de viaje" icono={IconoViaje} secundario alPresionar={() => router.push('/viaje')} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Boton texto="Cápsula" icono={IconoCapsula} secundario alPresionar={() => router.push('/capsula')} />
+              </View>
+            </View>
+          </View>
+        )}
+
+        <Paso numero={2} titulo="O elige tu prenda base" estilo={estilos.separacionPaso} />
         {prendas.length === 0 ? (
           <Text style={[texto.cuerpo, estilos.margen, { color: colores.textoSecundario }]}>
             Agrega prendas en la pestaña Armario para armar atuendos.
@@ -280,15 +366,20 @@ export default function PantallaGenerador() {
                 ))}
               </Aparecer>
 
-              <Paso numero={4} titulo="Tus atuendos" estilo={estilos.separacionPaso} />
+              <Paso
+                numero={4}
+                titulo={resultado.del_dia ? 'Tu look de hoy' : 'Tus atuendos'}
+                estilo={estilos.separacionPaso}
+              />
               <View style={estilos.margen}>
                 {resultado.sugerencias.length > 0 && (
                   <Text style={[texto.detalle, { marginBottom: espacio.s + 4 }]}>
                     Dale corazón a lo que te guste y te recomendaremos looks parecidos. Guardar un look también cuenta; los
-                    que dejes sin corazón cuentan como que no te gustaron.
+                    que dejes sin corazón cuentan como que no te gustaron. Si te pones uno, toca «Me lo puse hoy»: así no
+                    te lo repetimos mañana y ves en Estadísticas qué usas.
                   </Text>
                 )}
-                {resultado.sugerencias.length === 0 && (
+                {resultado.sugerencias.length === 0 && !resultado.del_dia && (
                   <Text style={[texto.cuerpo, { color: colores.textoSecundario, marginBottom: espacio.l }]}>
                     No hay un atuendo completo con esta prenda. Prueba con otra o agrega prendas que combinen con ella.
                   </Text>
@@ -298,7 +389,9 @@ export default function PantallaGenerador() {
                     <Perchero
                       sugerencia={sugerencia}
                       numero={indice + 1}
-                      etiqueta={indice === 0 ? 'La mejor opción' : undefined}
+                      titulo={resultado.del_dia ? 'Look de hoy' : undefined}
+                      etiquetaBase={resultado.del_dia ? 'La base' : undefined}
+                      etiqueta={resultado.del_dia ? 'Elegido para ti' : indice === 0 ? 'La mejor opción' : undefined}
                       destacado={indice === 0}
                       guardada={guardadas.includes(indice)}
                       guardando={guardando === indice}
@@ -309,6 +402,9 @@ export default function PantallaGenerador() {
                       conCorazon={(votos[firmaDe(sugerencia)] ?? sugerencia.voto) === 1}
                       alCorazon={() => alternarCorazon(sugerencia)}
                       errorVoto={erroresVoto[firmaDe(sugerencia)]}
+                      alUsar={() => usar(sugerencia)}
+                      usado={usadoHoy === firmaDe(sugerencia)}
+                      usando={usando === firmaDe(sugerencia)}
                     />
                   </Aparecer>
                 ))}
@@ -340,6 +436,8 @@ const useEstilos = crearEstilos(({ colores, texto }) => ({
   numeroPaso: { fontFamily: fuentes.negrita, fontSize: 14, lineHeight: 20, color: colores.fondo },
   tituloPaso: { ...texto.subtitulo, flex: 1 },
   separacionPaso: { marginTop: espacio.l },
+  sorpresa: { gap: espacio.s + 4, marginTop: espacio.m },
+  atajos: { flexDirection: 'row', gap: espacio.s },
   cargando: { alignItems: 'center', gap: espacio.s, paddingVertical: espacio.xxl },
   aviso: {
     flexDirection: 'row',

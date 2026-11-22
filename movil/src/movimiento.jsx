@@ -1,4 +1,4 @@
-// Movimiento de la app (estilo Motion-Driven de la skill): cascada al aparecer, escala al presionar
+// Movimiento de la app (estilo Motion-Driven del sistema de diseño): cascada al aparecer, escala al presionar
 // y vibración en las confirmaciones. Todo respeta "Reducir movimiento" del teléfono.
 import * as Haptics from 'expo-haptics';
 import { useEffect, useState } from 'react';

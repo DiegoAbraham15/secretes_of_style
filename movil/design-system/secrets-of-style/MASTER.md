@@ -1,6 +1,6 @@
 # Design System Master File
 
-> **Rediseño "Lookbook" (2026-10-29, skills frontend-design + UI/UX Pro Max) — manda sobre lo de abajo:**
+> **Rediseño "Lookbook" (2026-10-29) — manda sobre lo de abajo:**
 > - Tipografía: **Bodoni Moda** (600, 800 y 500 cursiva) para la marca, títulos, "Look N", números de pasos
 >   y cifras; **Outfit** (400/500/700) para la interfaz. Sin MAYÚSCULAS en etiquetas ni "·" en metadatos.
 > - Color: papel `#FFFFFF`, tinta `#1A1220`, un solo acento rosa `#BE185D`, rubor `#FBE4EE`, líneas `#E9E3EA`.

@@ -1,15 +1,23 @@
-import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
 
-import { eliminarAtuendo, listarAtuendos, urlImagen } from '../../../api';
-import { ETIQUETA_CATEGORIA, ETIQUETA_COLOR, HEX_COLOR, nombreDePrenda, ORDEN_CUERPO } from '../../../catalogos';
+import { eliminarAtuendo, fechaDeHoy, listarAtuendos, listarUsos, quitarUso, registrarUso } from '../../../api';
+import { ETIQUETA_CATEGORIA, ETIQUETA_COLOR, HEX_COLOR, nombreConColor, ORDEN_CUERPO } from '../../../catalogos';
 import { Encabezado } from '../../../componentes/Encabezado';
+import { FotoPrenda } from '../../../componentes/FotoPrenda';
 import { Probador } from '../../../componentes/Probador';
 import { ICONO_CLIMA } from '../../../componentes/TarjetaClima';
 import { confirmar } from '../../../confirmar';
-import { IconoAbrir, IconoCerrar, IconoEliminar, IconoGuardados, IconoNublado } from '../../../iconos';
+import {
+  IconoAbrir,
+  IconoCerrar,
+  IconoEliminar,
+  IconoGuardados,
+  IconoMeLoPuse,
+  IconoNublado,
+  IconoPalomita,
+} from '../../../iconos';
 import { Aparecer, vibrar } from '../../../movimiento';
 import { crearEstilos, espacio, espacioBarra, fuentes, presionado, radio, tactil, tamañoIcono, useTema } from '../../../tema';
 
@@ -27,12 +35,19 @@ function nombreDelDia(fecha) {
 
 const horaDe = (fecha) => fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false });
 
+// Identifica un atuendo por sus prendas, igual que el servidor.
+const firmaDe = (atuendo) =>
+  atuendo.elementos
+    .map((e) => e.prenda.id)
+    .sort((a, b) => a - b)
+    .join('-');
+
 // "azul marino, verde y café"
 const unirConY = (lista) => (lista.length < 2 ? lista.join('') : `${lista.slice(0, -1).join(', ')} y ${lista.at(-1)}`);
 
 // Un atuendo guardado dentro de la línea de tiempo: a la izquierda el día y la hora, en medio el punto
 // sobre la línea y a la derecha una tarjeta con el clima de ese día y las fotos de las prendas.
-function Entrada({ atuendo, dia, primera, ultima, alEliminar, eliminando }) {
+function Entrada({ atuendo, dia, primera, ultima, alEliminar, eliminando, alUsar, usado, usando }) {
   const { colores, texto } = useTema();
   const estilos = useEstilos();
   const [abierta, establecerAbierta] = useState(false);
@@ -88,15 +103,7 @@ function Entrada({ atuendo, dia, primera, ultima, alEliminar, eliminando }) {
 
         <View style={estilos.fotos}>
           {prendas.map((prenda) => (
-            <Image
-              key={prenda.id}
-              source={{ uri: urlImagen(prenda.url_imagen) }}
-              style={estilos.foto}
-              contentFit="cover"
-              cachePolicy="memory-disk"
-              transition={200}
-              accessibilityLabel={`${nombreDePrenda(prenda)} ${ETIQUETA_COLOR[prenda.color_principal].toLowerCase()}`}
-            />
+            <FotoPrenda key={prenda.id} prenda={prenda} style={estilos.foto} accessibilityLabel={nombreConColor(prenda)} />
           ))}
         </View>
 
@@ -106,7 +113,7 @@ function Entrada({ atuendo, dia, primera, ultima, alEliminar, eliminando }) {
               <View key={prenda.id} style={estilos.filaDetalle}>
                 <View style={[estilos.muestra, { backgroundColor: HEX_COLOR[prenda.color_principal] }]} />
                 <Text style={[texto.detalle, { flex: 1, color: colores.texto }]}>
-                  {nombreDePrenda(prenda)} {ETIQUETA_COLOR[prenda.color_principal].toLowerCase()}
+                  {nombreConColor(prenda)}
                 </Text>
                 {/* La categoría solo si el nombre no la dice ya (p. ej. "Chamarra", que es un abrigo) */}
                 {prenda.subcategoria && <Text style={texto.nota}>{ETIQUETA_CATEGORIA[prenda.categoria]}</Text>}
@@ -115,19 +122,38 @@ function Entrada({ atuendo, dia, primera, ultima, alEliminar, eliminando }) {
           </View>
         )}
 
-        <Pressable
-          onPress={() => establecerAbierta(!abierta)}
-          accessibilityRole="button"
-          accessibilityState={{ expanded: abierta }}
-          hitSlop={8}
-          style={({ pressed }) => [estilos.verMas, pressed && presionado]}>
-          <Text style={estilos.textoVerMas}>{abierta ? 'Ocultar prendas' : 'Ver prendas'}</Text>
-          {abierta ? (
-            <IconoCerrar color={colores.primario} size={14} weight="bold" />
-          ) : (
-            <IconoAbrir color={colores.primario} size={14} weight="bold" />
-          )}
-        </Pressable>
+        <View style={estilos.pie}>
+          <Pressable
+            onPress={() => establecerAbierta(!abierta)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: abierta }}
+            hitSlop={8}
+            style={({ pressed }) => [estilos.verMas, pressed && presionado]}>
+            <Text style={estilos.textoVerMas}>{abierta ? 'Ocultar prendas' : 'Ver prendas'}</Text>
+            {abierta ? (
+              <IconoCerrar color={colores.primario} size={14} weight="bold" />
+            ) : (
+              <IconoAbrir color={colores.primario} size={14} weight="bold" />
+            )}
+          </Pressable>
+          {/* Volver a ponerse un look guardado: un look por día; tocarlo otra vez lo deshace */}
+          <Pressable
+            onPress={alUsar}
+            disabled={usando}
+            accessibilityRole="button"
+            accessibilityState={{ selected: usado, busy: usando }}
+            hitSlop={8}
+            style={({ pressed }) => [estilos.verMas, pressed && presionado]}>
+            {usando ? (
+              <ActivityIndicator color={colores.primario} size="small" />
+            ) : usado ? (
+              <IconoPalomita color={colores.primario} size={14} weight="bold" />
+            ) : (
+              <IconoMeLoPuse color={colores.primario} size={14} weight="bold" />
+            )}
+            <Text style={estilos.textoVerMas}>{usado ? 'Te lo pusiste hoy' : 'Me lo puse hoy'}</Text>
+          </Pressable>
+        </View>
 
         <Probador sugerencia={atuendo} />
       </View>
@@ -143,12 +169,16 @@ export default function PantallaGuardados() {
   const [recargando, establecerRecargando] = useState(false);
   const [eliminando, establecerEliminando] = useState(null); // id del atuendo que se está eliminando
   const [error, establecerError] = useState(null);
+  const [usadoHoy, establecerUsadoHoy] = useState(null); // firma de lo que se marcó hoy con "Me lo puse"
+  const [usando, establecerUsando] = useState(null); // id del atuendo que se está marcando
 
   const cargar = useCallback(async () => {
     establecerError(null);
     try {
       // Si se eliminaron todas sus prendas, el atuendo ya no tiene nada que mostrar.
       establecerAtuendos((await listarAtuendos()).filter((a) => a.elementos.length > 0));
+      const deHoy = (await listarUsos(fechaDeHoy())).find((uso) => uso.fecha === fechaDeHoy());
+      establecerUsadoHoy(deHoy ? firmaDe(deHoy) : null);
     } catch (e) {
       establecerError(e.message);
     } finally {
@@ -185,6 +215,26 @@ export default function PantallaGuardados() {
     });
   }
 
+  async function usar(atuendo) {
+    const firma = firmaDe(atuendo);
+    establecerUsando(atuendo.id);
+    establecerError(null);
+    try {
+      if (usadoHoy === firma) {
+        await quitarUso(fechaDeHoy());
+        establecerUsadoHoy(null);
+      } else {
+        await registrarUso(atuendo.elementos.map((e) => e.prenda.id));
+        establecerUsadoHoy(firma);
+        vibrar.exito();
+      }
+    } catch (e) {
+      establecerError(e.message);
+    } finally {
+      establecerUsando(null);
+    }
+  }
+
   // El día solo se escribe en el primer atuendo de ese día.
   const dias = atuendos.map((a) => nombreDelDia(leerFecha(a.fecha_creacion)));
 
@@ -218,6 +268,9 @@ export default function PantallaGuardados() {
               ultima={index === atuendos.length - 1}
               alEliminar={() => eliminar(item)}
               eliminando={eliminando === item.id}
+              alUsar={() => usar(item)}
+              usado={usadoHoy === firmaDe(item)}
+              usando={usando === item.id}
             />
           </Aparecer>
         )}
@@ -304,6 +357,7 @@ const useEstilos = crearEstilos(({ colores, texto }) => ({
   detalle: { gap: espacio.s, paddingTop: espacio.s, borderTopWidth: 1, borderTopColor: colores.borde },
   filaDetalle: { flexDirection: 'row', alignItems: 'center', gap: espacio.s },
   muestra: { width: 10, height: 10, borderRadius: 5, borderWidth: 1, borderColor: colores.bordeControl },
+  pie: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: espacio.s, flexWrap: 'wrap' },
   verMas: {
     flexDirection: 'row',
     alignItems: 'center',
