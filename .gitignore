@@ -2,8 +2,7 @@
 Thumbs.db
 .DS_Store
 .env
-
-README.md
-
-# Skills locales de Claude
-.claude/
+__pycache__/
+*.pyc
+*.log
+.playwright-mcp/
