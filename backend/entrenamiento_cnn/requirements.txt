@@ -1,0 +1,14 @@
+# Entorno aparte para el entrenamiento de la CNN 1D (pandas + PyTorch). Necesita Python 3.11.
+# Instalar desde backend\entrenamiento_cnn:
+#   uv venv --python 3.11 .venv
+#   uv pip install --python .venv\Scripts\python.exe -r requirements.txt --index-strategy unsafe-best-match
+# Las versiones de pandas, pyarrow y scikit-learn son las que Windows (Control de aplicaciones) deja cargar en
+# esta computadora (las más nuevas traen DLL bloqueadas).
+--extra-index-url https://download.pytorch.org/whl/cpu
+pyarrow==17.0.0
+pandas==2.2.3
+numpy==2.2.6
+torch==2.5.1+cpu
+scikit-learn==1.5.2
+scipy==1.14.1
+pymongo==4.20.0

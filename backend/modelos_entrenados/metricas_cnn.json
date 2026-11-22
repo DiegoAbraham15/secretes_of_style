@@ -1,0 +1,191 @@
+{
+  "cnn": {
+    "umbral": 0.18,
+    "exactitud": 0.6972,
+    "f1": 0.34572169403630076,
+    "auc": 0.700640417207597,
+    "exactitud_siempre_no": 0.848800003528595
+  },
+  "mejor_epoca": 21,
+  "diferencia_numpy_pytorch": 1.7881393432617188e-07,
+  "historial": [
+    {
+      "epoca": 1,
+      "perdida_entrenamiento": 0.4089870374407087,
+      "perdida_validacion": 0.40921819138526916
+    },
+    {
+      "epoca": 2,
+      "perdida_entrenamiento": 0.3975359185559409,
+      "perdida_validacion": 0.39992713700930277
+    },
+    {
+      "epoca": 3,
+      "perdida_entrenamiento": 0.3911483935219901,
+      "perdida_validacion": 0.39436594654719037
+    },
+    {
+      "epoca": 4,
+      "perdida_entrenamiento": 0.38749695237704684,
+      "perdida_validacion": 0.3900346528530121
+    },
+    {
+      "epoca": 5,
+      "perdida_entrenamiento": 0.38542732236725946,
+      "perdida_validacion": 0.3892634298165639
+    },
+    {
+      "epoca": 6,
+      "perdida_entrenamiento": 0.3830578617640904,
+      "perdida_validacion": 0.38696373149553936
+    },
+    {
+      "epoca": 7,
+      "perdida_entrenamiento": 0.38189205991200037,
+      "perdida_validacion": 0.38906110038757324
+    },
+    {
+      "epoca": 8,
+      "perdida_entrenamiento": 0.380154141664505,
+      "perdida_validacion": 0.3861261930147807
+    },
+    {
+      "epoca": 9,
+      "perdida_entrenamiento": 0.37928178050858635,
+      "perdida_validacion": 0.38736922483444214
+    },
+    {
+      "epoca": 10,
+      "perdida_entrenamiento": 0.37876866951669963,
+      "perdida_validacion": 0.3875300757090251
+    },
+    {
+      "epoca": 11,
+      "perdida_entrenamiento": 0.37800231515339444,
+      "perdida_validacion": 0.38586138644218443
+    },
+    {
+      "epoca": 12,
+      "perdida_entrenamiento": 0.3770383540902819,
+      "perdida_validacion": 0.38442339231173195
+    },
+    {
+      "epoca": 13,
+      "perdida_entrenamiento": 0.3757199962615967,
+      "perdida_validacion": 0.3846902668158213
+    },
+    {
+      "epoca": 14,
+      "perdida_entrenamiento": 0.376013687644686,
+      "perdida_validacion": 0.38492968395551047
+    },
+    {
+      "epoca": 15,
+      "perdida_entrenamiento": 0.3761478347029005,
+      "perdida_validacion": 0.38614548241297403
+    },
+    {
+      "epoca": 16,
+      "perdida_entrenamiento": 0.3742134682042258,
+      "perdida_validacion": 0.38373993574778237
+    },
+    {
+      "epoca": 17,
+      "perdida_entrenamiento": 0.3747229197502136,
+      "perdida_validacion": 0.3855198186238607
+    },
+    {
+      "epoca": 18,
+      "perdida_entrenamiento": 0.37398972418648857,
+      "perdida_validacion": 0.38543380977312725
+    },
+    {
+      "epoca": 19,
+      "perdida_entrenamiento": 0.37439617463520597,
+      "perdida_validacion": 0.38560215326944985
+    },
+    {
+      "epoca": 20,
+      "perdida_entrenamiento": 0.3744811813286373,
+      "perdida_validacion": 0.3850246794382731
+    },
+    {
+      "epoca": 21,
+      "perdida_entrenamiento": 0.3725791710989816,
+      "perdida_validacion": 0.38291182809670765
+    },
+    {
+      "epoca": 22,
+      "perdida_entrenamiento": 0.37209518919672285,
+      "perdida_validacion": 0.3841928153832754
+    },
+    {
+      "epoca": 23,
+      "perdida_entrenamiento": 0.3717773522240775,
+      "perdida_validacion": 0.38411025606791177
+    },
+    {
+      "epoca": 24,
+      "perdida_entrenamiento": 0.37184671213286263,
+      "perdida_validacion": 0.38505071301460264
+    },
+    {
+      "epoca": 25,
+      "perdida_entrenamiento": 0.3716934156009129,
+      "perdida_validacion": 0.3839707602500915
+    },
+    {
+      "epoca": 26,
+      "perdida_entrenamiento": 0.37106613973208835,
+      "perdida_validacion": 0.3834811545213064
+    },
+    {
+      "epoca": 27,
+      "perdida_entrenamiento": 0.37112237638064793,
+      "perdida_validacion": 0.3841743251959483
+    },
+    {
+      "epoca": 28,
+      "perdida_entrenamiento": 0.370806178685597,
+      "perdida_validacion": 0.3834769735495249
+    },
+    {
+      "epoca": 29,
+      "perdida_entrenamiento": 0.3708199249812535,
+      "perdida_validacion": 0.3840266286214193
+    }
+  ],
+  "parametros": 1937,
+  "comparacion": [
+    {
+      "modelo": "CNN 1D",
+      "auc": 0.7006404864688454,
+      "f1": 0.35309114085404714,
+      "exactitud": 0.7293333333333333
+    },
+    {
+      "modelo": "Random Forest",
+      "auc": 0.6526691068789717,
+      "f1": 0.31875819851333625,
+      "exactitud": 0.5845333333333333
+    },
+    {
+      "modelo": "Regresión logística",
+      "auc": 0.643965184309723,
+      "f1": 0.3171024226433197,
+      "exactitud": 0.6204
+    },
+    {
+      "modelo": "Regla del cuestionario",
+      "auc": 0.6419543224836972,
+      "f1": 0.3167464114832536,
+      "exactitud": 0.6192
+    },
+    {
+      "modelo": "Siempre no",
+      "auc": 0.5,
+      "f1": 0.0,
+      "exactitud": 0.8488
+    }
+  ]
+}
