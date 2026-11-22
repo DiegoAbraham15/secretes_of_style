@@ -1,10 +1,10 @@
 """Limpieza de datos con pandas : revisa los votos antes de que entrenen al perceptrón.
 
-Los datos son los votos de la tabla votos_atuendo. Cada voto es una fila con:
+Los datos son los votos de la colección votos_atuendo (MongoDB). Cada voto es una fila con:
   X  las 13 características del atuendo (caracteristicas_de en aprendizaje.py), todas de 0 a 1
   y  me_gusta: +1 si le dio corazón, -1 si se le mostró y no le dio corazón
 
-Estrategia (la de la práctica, parte D, más un paso propio del proyecto):
+Estrategia (limpieza estándar con pandas más un paso propio del proyecto):
   PASO 1. Eliminar filas completamente duplicadas.
   PASO 2. Identificar los registros válidos: completos, en rango y sin contradicciones.
           Contradicción: atuendos distintos con características idénticas y votos distintos (por ejemplo,
@@ -18,13 +18,12 @@ Lo que se aparta solo deja de entrenar al perceptrón: no se borra de la base y 
 
 """
 
-import json
 from pathlib import Path
 
 import pandas as pd
 from fastapi import APIRouter, Depends
 
-from servidor.base_datos import consultar
+from servidor.consultas import votos_de
 from servidor.logica import ESTILOS
 from servidor.seguridad import usuario_actual
 
@@ -120,15 +119,9 @@ rutas = APIRouter()
 @rutas.get("/api/votos/limpieza")
 def ver_limpieza(usuario: dict = Depends(usuario_actual)):
     """Limpia los votos de la persona, exporta los CSV y dice cuántos entrenan y qué se apartó."""
-    filas = consultar("SELECT firma, me_gusta, caracteristicas FROM votos_atuendo WHERE usuario_id = ? ORDER BY id",
-                      (usuario["id"],))
-    votos = []
-    for fila in filas:
-        try:
-            caracteristicas = json.loads(fila["caracteristicas"])
-        except (TypeError, ValueError):
-            caracteristicas = None  # texto dañado: cae en "incompleto"
-        votos.append({**fila, "caracteristicas": caracteristicas})
+    # Un voto sin características (o que no sean un objeto) cae en "incompleto".
+    votos = [{**fila, "caracteristicas": fila.get("caracteristicas") if isinstance(fila.get("caracteristicas"), dict)
+              else None} for fila in votos_de(usuario["id"])]
 
     df = a_tabla(votos)
     df_validos, df_revision = limpiar(df)

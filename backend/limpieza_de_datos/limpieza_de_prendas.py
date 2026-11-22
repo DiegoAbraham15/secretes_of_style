@@ -1,4 +1,4 @@
-"""Limpieza de datos de las prendas con pandas (práctica 2, aplicada al armario).
+"""Limpieza de datos de las prendas con pandas (fotos y catálogos del armario).
 
 Los votos no son los únicos datos que importan: si la foto o los datos de una prenda están mal, el probador
 virtual y las recomendaciones salen mal. Por ejemplo, el pantalón #2 tenía una foto de 196x200 px y el
@@ -29,12 +29,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from PIL import Image, ImageOps
 
 from servidor import base_datos
-from servidor.base_datos import consultar
-from servidor.logica import COLORES_NEUTROS, COLORES_VIVOS, ESTAMPADOS, ESTILOS
+from servidor.consultas import prendas_de
+from servidor.esquemas import CATEGORIAS
+from servidor.logica import COLORES, COLORES_VIVOS, ESTAMPADOS, ESTILOS
 from servidor.seguridad import usuario_actual
 
-CATEGORIAS = ["parte_superior", "parte_inferior", "calzado", "abrigo", "accesorio"]
-COLORES = COLORES_NEUTROS | COLORES_VIVOS
 LADO_MINIMO_PX = 256  # con menos, el probador no alcanza a copiar el color ni la textura
 SATURACION_GRIS = 0.10  # por debajo, el centro de la foto se ve gris o neutro
 SATURACION_INTENSA = 0.45  # por encima, se ve de un color intenso
@@ -122,10 +121,6 @@ def limpiar(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
     df_revision = df.loc[~valido].copy()
     df_revision["motivo"] = motivo[~valido].str.rstrip("; ")
     return df_validas, df_revision, faltantes
-
-
-def prendas_de(usuario_id: int) -> list[dict]:
-    return consultar("SELECT * FROM prendas WHERE usuario_id = ? ORDER BY id", (usuario_id,))
 
 
 # ------------------------------------------------------------

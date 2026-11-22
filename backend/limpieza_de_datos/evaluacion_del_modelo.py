@@ -31,9 +31,13 @@ import pandas as pd
 from fastapi import APIRouter, Depends
 
 from limpieza_de_datos.limpieza_de_datos import CARACTERISTICAS, limpiar_votos
-from servidor.aprendizaje import PESO_PARECIDO, distancia, entrenar, escalar, pesos_iniciales, puntuar
-from servidor.base_datos import consultar, consultar_uno
+from limpieza_de_datos.modelos import cercania, parecido, perceptron, puntajes
+from servidor.aprendizaje import PESO_CNN, PESO_PARECIDO, pesos_iniciales
+from servidor.consultas import preferencias_de, prendas_de, votos_de
+from servidor.red_convolucional import ARCHIVO_MODELO, probabilidades
 from servidor.seguridad import usuario_actual
+
+ARCHIVO_METRICAS_CNN = ARCHIVO_MODELO.parent / "metricas_cnn.json"  # lo escriben entrenamiento_cnn/entrenamiento_cnn.py y comparacion_modelos.py
 
 PROPORCION_PRUEBA = 0.30
 SEMILLA = 42
@@ -55,16 +59,6 @@ def dividir(df: pd.DataFrame, semilla: int) -> tuple[pd.DataFrame, pd.DataFrame]
 # 2. LOS TRES SISTEMAS
 # ------------------------------------------------------------
 
-def votos_para_entrenar(df: pd.DataFrame) -> list[dict]:
-    """El formato que espera entrenar(): me_gusta en +1/-1 y las características en un diccionario."""
-    return [{"me_gusta": 1 if fila["me_gusta"] == 1 else -1,
-             "caracteristicas": {c: float(fila[c]) for c in CARACTERISTICAS}} for _, fila in df.iterrows()]
-
-
-def puntajes(pesos: dict, df: pd.DataFrame) -> pd.Series:
-    return df.apply(lambda fila: puntuar(pesos, {c: float(fila[c]) for c in CARACTERISTICAS}), axis=1)
-
-
 def arriba(puntaje: pd.Series, cuantos: int) -> pd.Series:
     """1 para los `cuantos` atuendos con mayor puntaje (lo que la app mostraría primero), 0 para los demás."""
     prediccion = pd.Series(0, index=puntaje.index)
@@ -81,18 +75,22 @@ def predicciones(entrenamiento: pd.DataFrame, prueba: pd.DataFrame, iniciales: d
     """
     cuantos = max(1, round(len(prueba) * entrenamiento["me_gusta"].mean()))
     regla = puntajes(iniciales, prueba)
-    perceptron = puntajes(entrenar(votos_para_entrenar(entrenamiento), iniciales), prueba)
-    gustados = [{c: float(fila[c]) for c in CARACTERISTICAS} for _, fila in entrenamiento[entrenamiento["me_gusta"] == 1].iterrows()]
-    parecido = prueba.apply(lambda fila: -min(distancia({c: float(fila[c]) for c in CARACTERISTICAS}, g) for g in gustados), axis=1)
-    sistema = pd.Series([(1 - PESO_PARECIDO) * a + PESO_PARECIDO * b
-                         for a, b in zip(escalar(list(perceptron)), escalar(list(parecido)))], index=prueba.index)
-    return {
+    solo_perceptron = perceptron(entrenamiento, prueba, iniciales)
+    solo_parecido = cercania(entrenamiento, prueba)
+    con_cnn = "cnn" in prueba  # CNN 1D (solo si hay modelo entrenado)
+    sistema = parecido(entrenamiento, prueba, iniciales, PESO_PARECIDO, PESO_CNN if con_cnn else 0.0)
+    resultado = {
         "siempre_no": (pd.Series(0, index=prueba.index), pd.Series(0.0, index=prueba.index)),
         "regla_fija": (arriba(regla, cuantos), regla),
-        "perceptron": (arriba(perceptron, cuantos), perceptron),
-        "parecido": (arriba(parecido, cuantos), parecido),
+        "perceptron": (arriba(solo_perceptron, cuantos), solo_perceptron),
+        "parecido": (arriba(solo_parecido, cuantos), solo_parecido),
         "sistema_actual": (arriba(sistema, cuantos), sistema),
     }
+    if con_cnn:
+        sin_cnn = parecido(entrenamiento, prueba, iniciales, PESO_PARECIDO)
+        resultado["cnn"] = (arriba(prueba["cnn"], cuantos), prueba["cnn"])
+        resultado["sistema_sin_cnn"] = (arriba(sin_cnn, cuantos), sin_cnn)
+    return resultado
 
 
 # ------------------------------------------------------------
@@ -126,12 +124,13 @@ def metricas(real: pd.Series, prediccion: pd.Series, puntaje: pd.Series) -> dict
 
 
 NOMBRES = {"regla_fija": "la regla del cuestionario", "perceptron": "el perceptrón",
-           "parecido": "el parecido con tus looks con corazón", "sistema_actual": "el sistema actual (90 % parecido)"}
+           "parecido": "el parecido con tus looks con corazón", "sistema_actual": "el sistema actual (90 % parecido)",
+           "cnn": "la CNN sola", "sistema_sin_cnn": "el sistema sin la CNN"}
 
 
 def conclusion(promedio: dict, corazones: int) -> str:
     """Quién ordena mejor tus gustos (el orden es la medida que más se parece a lo que hace la app)."""
-    ranking = sorted(NOMBRES, key=lambda nombre: promedio[nombre]["orden"], reverse=True)
+    ranking = sorted([n for n in NOMBRES if n in promedio], key=lambda nombre: promedio[nombre]["orden"], reverse=True)
     frase = "Orden promedio (0.5 es al azar): " + ", ".join(
         f"{NOMBRES[nombre]} {promedio[nombre]['orden']}" for nombre in ranking) + "."
     mejor = ranking[0]
@@ -148,26 +147,65 @@ def conclusion(promedio: dict, corazones: int) -> str:
 # RUTA 
 # ------------------------------------------------------------
 
+def tabla_de_votos(usuario_id: int) -> pd.DataFrame:
+    """Los votos que pasan la limpieza, como tabla: firma, las 13 características y me_gusta (1 o 0)."""
+    validos = limpiar_votos(votos_de(usuario_id))["validos"]
+    df = pd.DataFrame([{"firma": v["firma"], **{c: v["caracteristicas"][c] for c in CARACTERISTICAS},
+                        "me_gusta": 1 if v["me_gusta"] == 1 else 0} for v in validos],
+                      columns=["firma", *CARACTERISTICAS, "me_gusta"])
+    return agregar_cnn(df, usuario_id)
+
+
+def cnn_entrenada() -> dict | None:
+    """Cómo le fue a la CNN al entrenarse (datos simulados, personas que nunca vio), para la app. None sin modelo."""
+    if not ARCHIVO_METRICAS_CNN.exists():
+        return None
+    metricas = json.loads(ARCHIVO_METRICAS_CNN.read_text(encoding="utf-8"))
+    return {"auc": round(metricas["cnn"]["auc"], 3), "looks_simulados": 50_000,
+            "comparacion": [{"modelo": f["modelo"], "auc": round(f["auc"], 3)} for f in metricas.get("comparacion", [])]}
+
+
+def agregar_cnn(df: pd.DataFrame, usuario_id: int) -> pd.DataFrame:
+    """CNN 1D: columna "cnn" con la probabilidad de corazón de cada look votado.
+
+    La red ya viene entrenada (entrenamiento_cnn/), así que no aprende de estos votos: no hay fuga hacia la prueba.
+    El look se arma otra vez con su firma. Si alguna prenda ya se borró, la red no puede ver el look completo
+    y recibe el valor neutro (la mediana de los demás) en lugar de adivinar con medio look.
+    Sin modelo entrenado no se agrega la columna y todo se evalúa como antes.
+    """
+    prendas = {p["id"]: p for p in prendas_de(usuario_id)}
+    ids = [[int(i) if i.isdigit() else None for i in str(firma).split("-")] for firma in df["firma"]]
+    completos = [all(i in prendas for i in look) for look in ids]
+    probabilidad = probabilidades([[prendas[i] for i in look] for look, c in zip(ids, completos) if c],
+                                  preferencias_de(usuario_id))
+    if probabilidad is None:
+        return df
+    cnn = pd.Series(float("nan"), index=df.index)
+    cnn[completos] = probabilidad
+    df["cnn"] = cnn.fillna(cnn.median())
+    return df
+
+
+def iniciales_de(usuario_id: int) -> dict:
+    """Los pesos del cuestionario de estilo (la regla fija y el punto de partida del perceptrón)."""
+    return pesos_iniciales(preferencias_de(usuario_id) or {})
+
+
 rutas = APIRouter()
 
 
 @rutas.get("/api/votos/evaluacion")
 def evaluar_modelo(usuario: dict = Depends(usuario_actual)):
     """Evalúa el perceptrón de la persona contra la regla fija y contra decir siempre "no"."""
-    filas = consultar("SELECT firma, me_gusta, caracteristicas FROM votos_atuendo WHERE usuario_id = ? ORDER BY id",
-                      (usuario["id"],))
-    votos = [{**f, "caracteristicas": json.loads(f["caracteristicas"])} for f in filas]
-    validos = limpiar_votos(votos)["validos"]  # 1. solo los datos limpios
-    df = pd.DataFrame([{"firma": v["firma"], **{c: v["caracteristicas"][c] for c in CARACTERISTICAS},
-                        "me_gusta": 1 if v["me_gusta"] == 1 else 0} for v in validos])
-    corazones = int(df["me_gusta"].sum()) if len(df) else 0
+    df = tabla_de_votos(usuario["id"])  # 1. solo los datos limpios
+    corazones = int(df["me_gusta"].sum())
     if corazones < 2 or len(df) - corazones < 2:
-        return {"listo": False, "mensaje": "Hacen falta al menos 2 atuendos con corazón y 2 sin corazón para evaluar."}
+        return {"listo": False, "mensaje": "Hacen falta al menos 2 atuendos con corazón y 2 sin corazón para evaluar.",
+                "cnn_entrenada": cnn_entrenada()}
 
-    iniciales = pesos_iniciales(consultar_uno("SELECT * FROM preferencias_usuario WHERE usuario_id = ?",
-                                              (usuario["id"],)) or {})
+    iniciales = iniciales_de(usuario["id"])
 
-    # 2 a 5 con una sola división, como la práctica.
+    # 2 a 5 con una sola división.
     entrenamiento, prueba = dividir(df, SEMILLA)
     pred = predicciones(entrenamiento, prueba, iniciales)
     una = {nombre: metricas(prueba["me_gusta"], p, s) for nombre, (p, s) in pred.items()}
@@ -192,6 +230,7 @@ def evaluar_modelo(usuario: dict = Depends(usuario_actual)):
 
     return {
         "listo": True,
+        "cnn_entrenada": cnn_entrenada(),
         "datos": {"votos_validos": len(df), "con_corazon": corazones,
                   "entrenamiento": len(entrenamiento), "prueba": len(prueba)},
         "una_division": una,
