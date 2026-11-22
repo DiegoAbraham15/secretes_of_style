@@ -21,7 +21,7 @@ import {
 import { Aparecer, vibrar } from '../../../movimiento';
 import { crearEstilos, espacio, espacioBarra, fuentes, presionado, radio, tactil, tamañoIcono, useTema } from '../../../tema';
 
-// SQLite guarda la fecha en UTC sin zona ("2026-10-27 13:05:00").
+// La API responde la fecha en UTC sin zona ("2026-10-27 13:05:00").
 const leerFecha = (fechaUtc) => new Date(`${fechaUtc.replace(' ', 'T')}Z`);
 
 // "Hoy", "Ayer" o "28 oct": la columna de la izquierda de la línea de tiempo.
