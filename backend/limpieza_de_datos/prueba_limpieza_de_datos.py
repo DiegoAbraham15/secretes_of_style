@@ -303,7 +303,7 @@ ok((pca_prendas.CARPETA_CSV / f"pca_prendas_usuario_{usuario_id}.csv").exists(),
 ok(cliente.get("/api/prendas/pca").status_code == 401, "el PCA pide sesión")
 
 # ============================================================
-# LO QUE MUESTRA LA APP (pestaña Estadísticas: grupos, mapa y atípicos)
+# LO QUE MUESTRA LA APP (pantalla Estadísticas: grupos, mapa y atípicos)
 # ============================================================
 resultado = cliente.get("/api/prendas/grupos", headers=encabezado).json()
 ids = sorted(i for g in resultado["grupos"] for i in g["prendas"])

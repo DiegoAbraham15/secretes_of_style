@@ -11,7 +11,9 @@ import { CATEGORIAS, OCASIONES } from '../../catalogos';
 import { Boton } from '../../componentes/Boton';
 import { Campo } from '../../componentes/Campo';
 import { FotoPrenda } from '../../componentes/FotoPrenda';
+import { RangoFechas, fechaLarga, rangoADias, rangoInicial } from '../../componentes/RangoFechas';
 import { Selector } from '../../componentes/Selector';
+import { ICONO_CLIMA } from '../../componentes/TarjetaClima';
 import { TiraLook } from '../../componentes/TiraLook';
 import { IconoBuscar, IconoCapsula, IconoGuardados, IconoIr, IconoUbicacion } from '../../iconos';
 import { Aparecer, vibrar } from '../../movimiento';
@@ -21,7 +23,6 @@ const ESCENARIOS = [
   { valor: 'mensual', etiqueta: 'Del mes · 15 prendas' },
   { valor: 'viaje', etiqueta: 'Viaje · 10 prendas' },
 ];
-const DURACIONES = [3, 5, 7].map((n) => ({ valor: n, etiqueta: `${n} días` }));
 const LOOKS_VISIBLES = 20;
 
 export default function PantallaCapsula() {
@@ -29,7 +30,7 @@ export default function PantallaCapsula() {
   const estilos = useEstilos();
   const [escenario, establecerEscenario] = useState('mensual');
   const [ocasion, establecerOcasion] = useState('diario');
-  const [dias, establecerDias] = useState(5);
+  const [fechas, establecerFechas] = useState(() => rangoInicial(1, 5)); // { inicio, fin } del viaje
   const [busqueda, establecerBusqueda] = useState('');
   const [lugares, establecerLugares] = useState(null);
   const [lugar, establecerLugar] = useState(null);
@@ -69,7 +70,7 @@ export default function PantallaCapsula() {
     establecerError(null);
     try {
       const datos = { escenario, ocasion };
-      if (escenario === 'viaje') Object.assign(datos, { latitud: lugar.latitud, longitud: lugar.longitud, lugar: lugar.nombre, dias });
+      if (escenario === 'viaje') Object.assign(datos, { latitud: lugar.latitud, longitud: lugar.longitud, lugar: lugar.nombre, ...rangoADias(fechas) });
       const nuevo = await generarCapsula(datos);
       establecerResultado(nuevo);
       establecerNombre(escenario === 'viaje' ? `Viaje a ${lugar.nombre}` : nuevo.nombre);
@@ -145,7 +146,8 @@ export default function PantallaCapsula() {
               ))}
             </>
           )}
-          <Selector titulo="¿Cuántos días?" opciones={DURACIONES} seleccionado={dias} alCambiar={cambiar(establecerDias)} enLinea estilo={{ marginBottom: 0 }} />
+          <Text style={texto.antetitulo}>¿Qué días viajas?</Text>
+          <RangoFechas valor={fechas} alCambiar={cambiar(establecerFechas)} />
         </View>
       )}
 
@@ -174,6 +176,27 @@ export default function PantallaCapsula() {
               </Text>
             </View>
           </View>
+          {/* De dónde sale el clima: el pronóstico del DESTINO de cada día del viaje */}
+          {resultado.pronostico?.length > 0 && (
+            <View style={estilos.pronostico}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: espacio.s }}>
+                <IconoUbicacion color={colores.primario} size={tamañoIcono.s} />
+                <Text style={texto.cuerpoFuerte}>Pronóstico para {resultado.detalles.lugar}</Text>
+              </View>
+              {resultado.pronostico.map((clima) => {
+                const Icono = ICONO_CLIMA[clima.descripcion] ?? ICONO_CLIMA.Nublado;
+                return (
+                  <View key={clima.fecha} style={estilos.diaPronostico}>
+                    <Icono color={colores.primario} size={tamañoIcono.s} />
+                    <Text style={[texto.detalle, { flex: 1 }]}>{fechaLarga(clima.fecha)}</Text>
+                    <Text style={texto.detalle}>
+                      {clima.descripcion} · {Math.round(clima.maxima_c)}°/{Math.round(clima.minima_c)}° · {clima.probabilidad_lluvia} %
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
           {resultado.sugerencia && <Text style={texto.detalle}>{resultado.sugerencia}</Text>}
           {resultado.prendas.length === 0 && (
             <Text style={texto.detalle}>No hay prendas disponibles que sirvan para este clima y ocasión.</Text>
@@ -256,6 +279,8 @@ export default function PantallaCapsula() {
 const useEstilos = crearEstilos(({ colores, tarjeta }) => ({
   pantalla: { flex: 1, backgroundColor: colores.fondo },
   contenido: { padding: espacio.m, gap: espacio.m, paddingBottom: espacio.xxl },
+  pronostico: { gap: espacio.s, padding: espacio.m, borderRadius: radio.l, backgroundColor: colores.primarioSuave },
+  diaPronostico: { flexDirection: 'row', alignItems: 'center', gap: espacio.s, minHeight: 32 },
   elegido: { flexDirection: 'row', alignItems: 'center', gap: espacio.s, padding: espacio.m, borderRadius: radio.l, backgroundColor: colores.superficieSuave },
   enlace: { fontFamily: fuentes.media, fontSize: 14, color: colores.primario },
   opcion: { flexDirection: 'row', alignItems: 'center', gap: espacio.s, minHeight: 44, paddingHorizontal: espacio.s },

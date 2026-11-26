@@ -6,3 +6,6 @@ __pycache__/
 *.pyc
 *.log
 .playwright-mcp/
+
+# APK compilados: pesan mucho y se vuelven a generar
+apk/

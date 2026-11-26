@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { normalizarUrl, probarServidor } from '../api';
 import { Boton } from '../componentes/Boton';
 import { Campo } from '../componentes/Campo';
 import { IconoArmario, IconoCandado, IconoCorreo, IconoOcultar, IconoVer } from '../iconos';
@@ -13,13 +14,27 @@ export default function PantallaInicioSesion() {
   const { colores, texto } = useTema();
   const estilos = useEstilos();
   const { top, bottom } = useSafeAreaInsets();
-  const { iniciarSesion, registrarse } = useSesion();
+  const { iniciarSesion, registrarse, urlServidor, cambiarServidor } = useSesion();
+  const [editandoServidor, establecerEditandoServidor] = useState(false);
+  const [direccion, establecerDireccion] = useState('');
+  const [probando, establecerProbando] = useState(false);
   const [esRegistro, establecerEsRegistro] = useState(false);
   const [correo, establecerCorreo] = useState('');
   const [contraseña, establecerContraseña] = useState('');
   const [verContraseña, establecerVerContraseña] = useState(false);
   const [error, establecerError] = useState(null);
   const [enviando, establecerEnviando] = useState(false);
+
+  // Guarda la dirección solo si ahí responde un servidor de Secrets of Style.
+  async function guardarServidor() {
+    establecerError(null);
+    establecerProbando(true);
+    const funciona = !direccion.trim() || (await probarServidor(direccion));
+    establecerProbando(false);
+    if (!funciona) return establecerError('No encontramos el servidor en esa dirección. Revisa que esté encendido.');
+    cambiarServidor(direccion);
+    establecerEditandoServidor(false);
+  }
 
   async function enviar() {
     establecerError(null);
@@ -124,6 +139,37 @@ export default function PantallaInicioSesion() {
               }}
             />
           </Aparecer>
+
+          <View style={estilos.servidor}>
+            {editandoServidor ? (
+              <>
+                <Campo
+                  value={direccion}
+                  onChangeText={establecerDireccion}
+                  placeholder="https://tu-servidor.trycloudflare.com"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                  onSubmitEditing={guardarServidor}
+                  accessibilityLabel="Dirección del servidor; vacía usa la predeterminada"
+                />
+                <Boton texto="Guardar servidor" secundario alPresionar={guardarServidor} cargando={probando} />
+              </>
+            ) : (
+              <Pressable
+                onPress={() => {
+                  establecerDireccion(urlServidor);
+                  establecerEditandoServidor(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Servidor ${urlServidor}. Cambiar`}
+                style={({ pressed }) => [{ minHeight: tactil, justifyContent: 'center' }, pressed && presionado]}>
+                <Text style={[texto.nota, { textAlign: 'center' }]} numberOfLines={1}>
+                  Servidor: {normalizarUrl(urlServidor).replace(/^https?:\/\//, '')} · Cambiar
+                </Text>
+              </Pressable>
+            )}
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -132,6 +178,7 @@ export default function PantallaInicioSesion() {
 
 const useEstilos = crearEstilos(({ colores, texto, tarjeta }) => ({
   pantalla: { flex: 1, backgroundColor: colores.fondo },
+  servidor: { marginTop: espacio.m, gap: espacio.s },
   marca: { alignItems: 'center', paddingHorizontal: espacio.l, paddingBottom: espacio.xl },
   sello: {
     width: 72,

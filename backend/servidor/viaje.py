@@ -28,6 +28,7 @@ from servidor.logica import hechos_de_ocasion, hechos_del_clima, razonar_clima
 from servidor.red_convolucional import probabilidades
 
 URL_LUGARES = "https://geocoding-api.open-meteo.com/v1/search"
+DIAS_DE_PRONOSTICO = 16  # hoy y los 15 días siguientes: lo que pide pronostico_diario a Open-Meteo
 HORAS_DE_CACHE = 3  # el pronóstico de varios días cambia poco en unas horas
 # Costo extra por cada parte de arriba o de abajo que ya salió en el viaje. Es la mayor diferencia que pueden hacer
 # los gustos (±AJUSTE_MAXIMO): así repetir pierde contra cualquier preferencia, pero no contra el clima (+3) ni
@@ -69,7 +70,7 @@ def pronostico_diario(latitud: float, longitud: float) -> dict:
         return guardado["reporte"]
     try:
         datos = consultar(URL_OPEN_METEO, {
-            "latitude": latitud, "longitude": longitud, "forecast_days": 16, "timezone": "auto",
+            "latitude": latitud, "longitude": longitud, "forecast_days": DIAS_DE_PRONOSTICO, "timezone": "auto",
             "daily": "temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,"
                      "precipitation_probability_max,weather_code",
         })

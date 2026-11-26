@@ -6,21 +6,21 @@ import { Platform } from 'react-native';
 import * as api from './api';
 
 const CLAVE_TOKEN = 'token_sesion';
+const CLAVE_SERVIDOR = 'url_servidor';
 
 // En el teléfono se usa almacenamiento cifrado; en web, localStorage.
-const almacen = {
-  leer: () =>
-    Platform.OS === 'web'
-      ? Promise.resolve(localStorage.getItem(CLAVE_TOKEN))
-      : SecureStore.getItemAsync(CLAVE_TOKEN),
+const almacenDe = (clave) => ({
+  leer: () => (Platform.OS === 'web' ? Promise.resolve(localStorage.getItem(clave)) : SecureStore.getItemAsync(clave)),
   guardar: (valor) => {
     if (Platform.OS === 'web') {
-      if (valor) localStorage.setItem(CLAVE_TOKEN, valor);
-      else localStorage.removeItem(CLAVE_TOKEN);
-    } else if (valor) SecureStore.setItemAsync(CLAVE_TOKEN, valor);
-    else SecureStore.deleteItemAsync(CLAVE_TOKEN);
+      if (valor) localStorage.setItem(clave, valor);
+      else localStorage.removeItem(clave);
+    } else if (valor) SecureStore.setItemAsync(clave, valor);
+    else SecureStore.deleteItemAsync(clave);
   },
-};
+});
+const almacen = almacenDe(CLAVE_TOKEN);
+const almacenServidor = almacenDe(CLAVE_SERVIDOR);
 
 const ContextoSesion = createContext(null);
 
@@ -37,10 +37,21 @@ export function ProveedorSesion({ children }) {
   // { token, correo, cuestionarioListo } de la última sesión consultada
   const [cuenta, establecerCuenta] = useState(null);
 
-  // Al abrir la app, recupera la sesión guardada.
+  const [urlServidor, establecerUrlServidor] = useState(api.obtenerUrlApi());
+
+  // Al abrir la app, recupera la dirección del servidor y la sesión guardadas (la dirección primero: la sesión se
+  // verifica contra ese servidor).
   useEffect(() => {
-    almacen
+    almacenServidor
       .leer()
+      .then((guardada) => {
+        if (guardada) {
+          api.establecerUrlApi(guardada);
+          establecerUrlServidor(api.obtenerUrlApi());
+        }
+      })
+      .catch(() => null)
+      .then(() => almacen.leer())
       .then(establecerToken)
       .catch(() => null)
       .finally(() => establecerCargando(false));
@@ -68,6 +79,14 @@ export function ProveedorSesion({ children }) {
   const valor = {
     token,
     cargando,
+    urlServidor,
+    // Cambia a qué servidor habla la app (vacío = el predeterminado). Cierra la sesión: el token es de otro servidor.
+    cambiarServidor: (url) => {
+      api.establecerUrlApi(url);
+      establecerUrlServidor(api.obtenerUrlApi());
+      almacenServidor.guardar(api.obtenerUrlApi() === api.urlPredeterminada() ? null : api.obtenerUrlApi());
+      guardarToken(null);
+    },
     correo: cuenta?.token === token ? cuenta.correo : null, // al cambiar de cuenta no se ve el correo anterior
     cuestionarioListo: cuenta?.token === token ? cuenta.cuestionarioListo : null, // null: aún no se sabe
     marcarCuestionarioListo: () => establecerCuenta((actual) => ({ ...actual, cuestionarioListo: true })),

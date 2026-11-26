@@ -3,9 +3,40 @@ import Constants from 'expo-constants';
 import { File } from 'expo-file-system';
 import { Platform } from 'react-native';
 
-// Usa EXPO_PUBLIC_URL_API si existe; si no, la IP de la computadora que sirve la app, puerto 8000.
+// La dirección del servidor: la que la persona guardó en la app (Servidor, en Iniciar sesión), si no EXPO_PUBLIC_URL_API
+// y, si tampoco, la IP de la computadora que sirve la app, puerto 8000. Así el APK funciona con cualquier dirección
+// (un túnel o un servidor en internet) sin volver a compilarlo.
 const hostMetro = Constants.expoConfig?.hostUri?.split(':')[0] ?? 'localhost';
-const URL_API = process.env.EXPO_PUBLIC_URL_API ?? `http://${hostMetro}:8000`;
+const URL_PREDETERMINADA = process.env.EXPO_PUBLIC_URL_API ?? `http://${hostMetro}:8000`;
+let URL_API = URL_PREDETERMINADA;
+
+export const obtenerUrlApi = () => URL_API;
+export const urlPredeterminada = () => URL_PREDETERMINADA;
+
+// "mi-servidor.trycloudflare.com/" → "https://mi-servidor.trycloudflare.com" (si no trae http, se asume https).
+export function normalizarUrl(texto) {
+  const limpio = String(texto ?? '').trim().replace(/\/+$/, '');
+  if (!limpio) return '';
+  return /^https?:\/\//i.test(limpio) ? limpio : `https://${limpio}`;
+}
+
+export function establecerUrlApi(url) {
+  URL_API = normalizarUrl(url) || URL_PREDETERMINADA;
+}
+
+// ¿Responde un servidor de Secrets of Style en esa dirección? (/api/salud no pide sesión)
+export async function probarServidor(url) {
+  const direccion = normalizarUrl(url);
+  if (!direccion) return false;
+  try {
+    const control = new AbortController();
+    const limite = setTimeout(() => control.abort(), 8000);
+    const respuesta = await fetch(`${direccion}/api/salud`, { signal: control.signal }).finally(() => clearTimeout(limite));
+    return respuesta.ok;
+  } catch {
+    return false;
+  }
+}
 
 export const urlImagen = (ruta) => `${URL_API}${ruta}`;
 
@@ -19,6 +50,7 @@ export function establecerToken(nuevoToken, cuandoExpire) {
 
 async function peticion(ruta, opciones = {}) {
   const encabezados = {};
+  if (URL_API.includes('ngrok')) encabezados['ngrok-skip-browser-warning'] = '1'; // evita la página de aviso de ngrok
   if (token) encabezados.Authorization = `Bearer ${token}`;
   if (typeof opciones.body === 'string') encabezados['Content-Type'] = 'application/json';
 

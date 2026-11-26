@@ -14,7 +14,9 @@ Requisitos: Ollama abierto y el modelo descargado (ollama pull gemma3:4b).
 """
 
 import json
+import unicodedata
 
+from servidor.esquemas import TIPOS_POR_CATEGORIA
 from servidor.logica import COLORES, ESTAMPADOS, ESTILOS
 from servidor.ollama import preguntar
 
@@ -23,13 +25,8 @@ from servidor.ollama import preguntar
 # ------------------------------------------------
 
 # Mismas categorías que esquemas.CATEGORIAS, con ejemplos para el prompt.
-EJEMPLOS_CATEGORIA = {
-    "parte_superior": "blusa, playera, camisa, top, suéter, sudadera",
-    "parte_inferior": "pantalón, jeans, falda, short",
-    "calzado": "tenis, zapatos, botas, botines, sandalias",
-    "abrigo": "chamarra, abrigo, gabardina, chaleco, impermeable",
-    "accesorio": "bolsa, gorra, sombrero, bufanda, cinturón, lentes, reloj",
-}
+# Los ejemplos son los tipos del catálogo (esquemas.TIPOS_POR_CATEGORIA): así la IA y el formulario hablan igual.
+EJEMPLOS_CATEGORIA = {categoria: ", ".join(t.lower() for t in tipos) for categoria, tipos in TIPOS_POR_CATEGORIA.items()}
 COLORES_ORDENADOS = sorted(COLORES)
 
 ESQUEMA = {
@@ -50,7 +47,8 @@ INSTRUCCIONES = f"""Eres el asistente de un armario digital. Mira la prenda de l
 
 categoria: una de estas (con ejemplos):
 {chr(10).join(f"- {c}: {e}" for c, e in EJEMPLOS_CATEGORIA.items())}
-subcategoria: el tipo de prenda en español, en una o dos palabras (por ejemplo "Blusa", "Jeans", "Botines").
+subcategoria: el tipo de prenda en español. Usa exactamente uno de los de la categoría si la prenda encaja (los
+de arriba); si no, escribe el tipo en una o dos palabras (por ejemplo "Vestido", "Mochila").
 color_principal: el color que cubre más área de la prenda, no del fondo. Usa "mezclilla" para el azul
 de los jeans, "azul_marino" para el azul muy oscuro y "cafe" para el café o marrón.
 estampado: "liso" si es de un solo color (aunque tenga costuras o botones); si no, "rayas", "cuadros",
@@ -68,15 +66,33 @@ impermeable: true solo si la prenda resiste la lluvia (impermeable, botas de llu
 # 2. CONSULTA AL MODELO
 # ------------------------------------------------
 
+def sin_acentos(texto: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFD", texto.lower()) if unicodedata.category(c) != "Mn")
+
+
+def normalizar_tipo(texto: str, categoria: str | None) -> str:
+    """Si el tipo es uno del catálogo de la categoría (sin importar mayúsculas, acentos ni plural), da su nombre exacto.
+
+    "short" y "shorts", "pantalon" y "Pantalón" o "sueter" y "Suéter" quedan igual que en la app; lo demás se respeta.
+    """
+    buscado = sin_acentos(texto.strip())
+    for tipo in TIPOS_POR_CATEGORIA.get(categoria, []):
+        base = sin_acentos(tipo)
+        if buscado in (base, base + "s", base + "es", base.rstrip("s"), base.rstrip("s") + "s"):
+            return tipo
+    return texto
+
+
 def limpiar_respuesta(datos: dict) -> dict:
     """Deja solo valores válidos para el formulario; lo que no sirva queda en None."""
     def del_catalogo(campo, catalogo):
         return datos.get(campo) if datos.get(campo) in catalogo else None
 
-    subcategoria = str(datos.get("subcategoria") or "").strip()[:60]
+    categoria = del_catalogo("categoria", EJEMPLOS_CATEGORIA)
+    subcategoria = normalizar_tipo(str(datos.get("subcategoria") or "").strip()[:60], categoria)
     abrigo = datos.get("nivel_abrigo")
     return {
-        "categoria": del_catalogo("categoria", EJEMPLOS_CATEGORIA),
+        "categoria": categoria,
         "subcategoria": subcategoria[:1].upper() + subcategoria[1:] or None,
         "color_principal": del_catalogo("color_principal", COLORES_ORDENADOS),
         "estampado": del_catalogo("estampado", ESTAMPADOS),

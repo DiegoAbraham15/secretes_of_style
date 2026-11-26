@@ -6,11 +6,13 @@
 import { useCallback, useRef, useState } from 'react';
 import { Pressable, Switch, Text, View } from 'react-native';
 
-import { CATEGORIAS, COLORES, ESTAMPADOS, ESTILOS, NIVELES_ABRIGO, TEMPORADAS } from '../catalogos';
+import { CATEGORIAS, COLORES, ESTAMPADOS, ESTILOS, NIVELES_ABRIGO, TEMPORADAS, tiposDe } from '../catalogos';
 import { IconoAbrir, IconoCerrar } from '../iconos';
 import { crearEstilos, espacio, fuentes, presionado, tactil, useTema } from '../tema';
 import { Campo } from './Campo';
 import { Selector } from './Selector';
+
+const OTRO = '__otro__'; // la pastilla "Otro" del tipo de prenda
 
 const VACIOS = {
   categoria: null,
@@ -63,6 +65,16 @@ export function useFormularioPrenda(inicial) {
     tocados.current.add(campo);
     establecerValores((actuales) => {
       const nuevos = { ...actuales, [campo]: valor };
+      // Al cambiar de categoría, un tipo del catálogo de la anterior ya no aplica (uno escrito a mano se respeta).
+      if (campo === 'categoria' && tiposDe(actuales.categoria).some((t) => t.valor === actuales.subcategoria)) nuevos.subcategoria = '';
+      // Al elegir un tipo, se propone su nivel de abrigo (un short es 1, una chamarra 4) si nadie lo ha tocado.
+      if (campo === 'subcategoria') {
+        const tipo = tiposDe(nuevos.categoria).find((t) => t.valor === valor);
+        if (tipo && !tocados.current.has('nivel_abrigo')) {
+          nuevos.nivel_abrigo = tipo.abrigo;
+          if (!tocados.current.has('temporada')) nuevos.temporada = temporadaDe(tipo.abrigo);
+        }
+      }
       // Si cambia el abrigo y la temporada nadie la tocó, se propone sola.
       if (campo === 'nivel_abrigo' && !tocados.current.has('temporada')) nuevos.temporada = temporadaDe(valor);
       return nuevos;
@@ -97,9 +109,48 @@ export function FormularioPrenda({ valores, alCambiar, compacto = false, conComp
   const enLinea = compacto; // en las tarjetas, las opciones se deslizan de lado para no ocupar media pantalla
   const separado = compacto ? { marginBottom: espacio.s + 4 } : undefined;
 
+  // Tipo de prenda: aparece cuando ya hay categoría y solo trae los tipos de esa categoría. "Otro" abre un campo de
+  // texto; si el tipo guardado no está en el catálogo (lo escribió la persona o la IA), se muestra como "Otro".
+  const [categoriaConOtro, establecerCategoriaConOtro] = useState(null); // categoría en la que se tocó "Otro"
+  const tipos = tiposDe(valores.categoria);
+  const enCatalogo = tipos.some((t) => t.valor === valores.subcategoria);
+  const esOtro = categoriaConOtro === valores.categoria || (valores.subcategoria !== '' && !enCatalogo);
+  const opcionesDeTipo = [...tipos.map((t) => ({ valor: t.valor, etiqueta: t.valor })), { valor: OTRO, etiqueta: 'Otro' }];
+  const elegirTipo = (valor) => {
+    if (valor === OTRO) {
+      establecerCategoriaConOtro(valores.categoria);
+      if (enCatalogo) alCambiar('subcategoria', '');
+      return;
+    }
+    establecerCategoriaConOtro(null);
+    alCambiar('subcategoria', valor);
+  };
+
   return (
     <View>
       <Selector titulo="Categoría" opciones={CATEGORIAS} seleccionado={valores.categoria} alCambiar={(v) => alCambiar('categoria', v)} enLinea={enLinea} estilo={separado} />
+      {valores.categoria && (
+        <>
+          <Selector
+            titulo="Tipo de prenda"
+            opciones={opcionesDeTipo}
+            seleccionado={esOtro ? OTRO : enCatalogo ? valores.subcategoria : null}
+            alCambiar={elegirTipo}
+            enLinea={enLinea}
+            estilo={separado}
+          />
+          {esOtro && (
+            <Campo
+              value={valores.subcategoria}
+              onChangeText={(v) => alCambiar('subcategoria', v)}
+              placeholder="¿Qué tipo de prenda es?"
+              maxLength={60}
+              accessibilityLabel="Escribe el tipo de prenda"
+              estilo={estilos.campo}
+            />
+          )}
+        </>
+      )}
       <Selector titulo="Color principal" opciones={COLORES} seleccionado={valores.color_principal} alCambiar={(v) => alCambiar('color_principal', v)} enLinea={enLinea} estilo={separado} />
       <Selector titulo="Nivel de abrigo" opciones={NIVELES_ABRIGO} seleccionado={valores.nivel_abrigo} alCambiar={(v) => alCambiar('nivel_abrigo', v)} enLinea={enLinea} estilo={separado} />
       <Selector titulo="Temporada" opciones={TEMPORADAS} seleccionado={valores.temporada} alCambiar={(v) => alCambiar('temporada', v)} enLinea={enLinea} estilo={separado} />
@@ -110,7 +161,7 @@ export function FormularioPrenda({ valores, alCambiar, compacto = false, conComp
           accessibilityRole="button"
           accessibilityState={{ expanded: abierto }}
           style={({ pressed }) => [estilos.mas, pressed && presionado]}>
-          <Text style={estilos.textoMas}>{abierto ? 'Menos datos' : 'Más datos: tipo, estampado, estilo…'}</Text>
+          <Text style={estilos.textoMas}>{abierto ? 'Menos datos' : 'Más datos: estampado, estilo…'}</Text>
           {abierto ? (
             <IconoCerrar color={colores.primario} size={14} weight="bold" />
           ) : (
@@ -121,15 +172,6 @@ export function FormularioPrenda({ valores, alCambiar, compacto = false, conComp
 
       {abierto && (
         <>
-          <Text style={texto.antetitulo}>Tipo de prenda (opcional)</Text>
-          <Campo
-            value={valores.subcategoria}
-            onChangeText={(v) => alCambiar('subcategoria', v)}
-            placeholder="Blusa, jeans, botines"
-            maxLength={60}
-            accessibilityLabel="Tipo de prenda, opcional"
-            estilo={estilos.campo}
-          />
           <Selector titulo="Estampado" opciones={ESTAMPADOS} seleccionado={valores.estampado} alCambiar={(v) => alCambiar('estampado', v)} enLinea={enLinea} estilo={separado} />
           <Selector titulo="Estilo" opciones={ESTILOS} seleccionado={valores.estilo} alCambiar={(v) => alCambiar('estilo', v)} enLinea={enLinea} estilo={separado} />
           <View style={estilos.interruptor}>

@@ -1,4 +1,4 @@
-"""Lo que la pestaña Estadísticas muestra de la segmentación, los atípicos y el PCA, en una sola petición.
+"""Lo que la pantalla Estadísticas muestra de la segmentación, los atípicos y el PCA, en una sola petición.
 
   Tus grupos de ropa        los segmentos de K-means (segmentacion_kmeans.py), con sus prendas.
   Mapa de tu armario        cada prenda en PC1 y PC2 (pca_prendas.py), del color de su grupo, y qué significa

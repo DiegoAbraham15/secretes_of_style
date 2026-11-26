@@ -1,0 +1,272 @@
+[
+  {
+    "archivo": "bolsa_mensajero.jpg",
+    "categoria": "accesorio",
+    "subcategoria": "Bolsa",
+    "color_principal": "azul",
+    "estampado": "liso",
+    "estilo": "casual",
+    "nivel_abrigo": 1,
+    "impermeable": false
+  },
+  {
+    "archivo": "botas_azules.jpg",
+    "categoria": "calzado",
+    "subcategoria": "Botas",
+    "color_principal": "azul_marino",
+    "estampado": "liso",
+    "estilo": "urbano",
+    "nivel_abrigo": 4,
+    "impermeable": false
+  },
+  {
+    "archivo": "botines_negros.jpg",
+    "categoria": "calzado",
+    "subcategoria": "Botines",
+    "color_principal": "negro",
+    "estampado": "liso",
+    "estilo": "urbano",
+    "nivel_abrigo": 4,
+    "impermeable": false
+  },
+  {
+    "archivo": "bufanda_azul.jpg",
+    "categoria": "accesorio",
+    "subcategoria": "Bufanda",
+    "color_principal": "azul",
+    "estampado": "liso",
+    "estilo": "casual",
+    "nivel_abrigo": 3,
+    "impermeable": false
+  },
+  {
+    "archivo": "camisa_crema.jpg",
+    "categoria": "parte_superior",
+    "subcategoria": "Camisa",
+    "color_principal": "beige",
+    "estampado": "liso",
+    "estilo": "formal",
+    "nivel_abrigo": 3,
+    "impermeable": false
+  },
+  {
+    "archivo": "camisa_gris.jpg",
+    "categoria": "parte_superior",
+    "subcategoria": "Camisa",
+    "color_principal": "gris",
+    "estampado": "otro",
+    "estilo": "semiformal",
+    "nivel_abrigo": 3,
+    "impermeable": false
+  },
+  {
+    "archivo": "chaleco_crema.jpg",
+    "categoria": "abrigo",
+    "subcategoria": "Chaleco",
+    "color_principal": "beige",
+    "estampado": "liso",
+    "estilo": "formal",
+    "nivel_abrigo": 3,
+    "impermeable": false
+  },
+  {
+    "archivo": "chamarra_azul.jpg",
+    "categoria": "abrigo",
+    "subcategoria": "Chamarra",
+    "color_principal": "azul",
+    "estampado": "otro",
+    "estilo": "deportivo",
+    "nivel_abrigo": 4,
+    "impermeable": false
+  },
+  {
+    "archivo": "chamarra_gris.jpg",
+    "categoria": "abrigo",
+    "subcategoria": "Chamarra",
+    "color_principal": "gris",
+    "estampado": "liso",
+    "estilo": "casual",
+    "nivel_abrigo": 4,
+    "impermeable": false
+  },
+  {
+    "archivo": "chamarra_oliva.jpg",
+    "categoria": "abrigo",
+    "subcategoria": "Chamarra",
+    "color_principal": "cafe",
+    "estampado": "liso",
+    "estilo": "casual",
+    "nivel_abrigo": 4,
+    "impermeable": false
+  },
+  {
+    "archivo": "gorra_blanca_azul.jpg",
+    "categoria": "accesorio",
+    "subcategoria": "Gorra",
+    "color_principal": "azul",
+    "estampado": "otro",
+    "estilo": "casual",
+    "nivel_abrigo": 1,
+    "impermeable": false
+  },
+  {
+    "archivo": "jeans_azules.jpg",
+    "categoria": "parte_inferior",
+    "subcategoria": "Jeans",
+    "color_principal": "mezclilla",
+    "estampado": "liso",
+    "estilo": "casual",
+    "nivel_abrigo": 3,
+    "impermeable": false
+  },
+  {
+    "archivo": "lentes_redondos.jpg",
+    "categoria": "accesorio",
+    "subcategoria": "Lentes",
+    "color_principal": "cafe",
+    "estampado": "liso",
+    "estilo": "casual",
+    "nivel_abrigo": 1,
+    "impermeable": false
+  },
+  {
+    "archivo": "mocasines_cafe.jpg",
+    "categoria": "calzado",
+    "subcategoria": "Mocasines",
+    "color_principal": "cafe",
+    "estampado": "otro",
+    "estilo": "semiformal",
+    "nivel_abrigo": 3,
+    "impermeable": false
+  },
+  {
+    "archivo": "mochila_roja.jpg",
+    "categoria": "accesorio",
+    "subcategoria": "Mochila",
+    "color_principal": "rojo",
+    "estampado": "liso",
+    "estilo": "urbano",
+    "nivel_abrigo": 1,
+    "impermeable": false
+  },
+  {
+    "archivo": "playera_blanca.jpg",
+    "categoria": "parte_superior",
+    "subcategoria": "Playera",
+    "color_principal": "blanco",
+    "estampado": "otro",
+    "estilo": "urbano",
+    "nivel_abrigo": 2,
+    "impermeable": false
+  },
+  {
+    "archivo": "polo_negro.jpg",
+    "categoria": "parte_superior",
+    "subcategoria": "Polo",
+    "color_principal": "negro",
+    "estampado": "liso",
+    "estilo": "casual",
+    "nivel_abrigo": 2,
+    "impermeable": false
+  },
+  {
+    "archivo": "reloj_correa_azul.jpg",
+    "categoria": "accesorio",
+    "subcategoria": "Reloj",
+    "color_principal": "azul",
+    "estampado": "liso",
+    "estilo": "semiformal",
+    "nivel_abrigo": 1,
+    "impermeable": false
+  },
+  {
+    "archivo": "saco_azul.jpg",
+    "categoria": "abrigo",
+    "subcategoria": "Saco",
+    "color_principal": "azul",
+    "estampado": "liso",
+    "estilo": "formal",
+    "nivel_abrigo": 3,
+    "impermeable": false
+  },
+  {
+    "archivo": "saco_verde.jpg",
+    "categoria": "abrigo",
+    "subcategoria": "Saco",
+    "color_principal": "verde",
+    "estampado": "liso",
+    "estilo": "formal",
+    "nivel_abrigo": 3,
+    "impermeable": false
+  },
+  {
+    "archivo": "shorts_camuflaje.jpg",
+    "categoria": "parte_inferior",
+    "subcategoria": "Shorts",
+    "color_principal": "verde",
+    "estampado": "otro",
+    "estilo": "casual",
+    "nivel_abrigo": 1,
+    "impermeable": false
+  },
+  {
+    "archivo": "sudadera_beige.jpg",
+    "categoria": "parte_superior",
+    "subcategoria": "Sudadera",
+    "color_principal": "beige",
+    "estampado": "otro",
+    "estilo": "urbano",
+    "nivel_abrigo": 4,
+    "impermeable": false
+  },
+  {
+    "archivo": "sueter_marino.jpg",
+    "categoria": "parte_superior",
+    "subcategoria": "Suéter",
+    "color_principal": "azul_marino",
+    "estampado": "otro",
+    "estilo": "casual",
+    "nivel_abrigo": 4,
+    "impermeable": false
+  },
+  {
+    "archivo": "tenis_blancos.jpg",
+    "categoria": "calzado",
+    "subcategoria": "Tenis",
+    "color_principal": "blanco",
+    "estampado": "liso",
+    "estilo": "urbano",
+    "nivel_abrigo": 3,
+    "impermeable": false
+  },
+  {
+    "archivo": "tenis_marino_rojo.jpg",
+    "categoria": "calzado",
+    "subcategoria": "Tenis",
+    "color_principal": "azul_marino",
+    "estampado": "liso",
+    "estilo": "urbano",
+    "nivel_abrigo": 3,
+    "impermeable": false
+  },
+  {
+    "archivo": "tenis_negros.jpg",
+    "categoria": "calzado",
+    "subcategoria": "Tenis",
+    "color_principal": "negro",
+    "estampado": "liso",
+    "estilo": "urbano",
+    "nivel_abrigo": 3,
+    "impermeable": false
+  },
+  {
+    "archivo": "zapatos_negros.jpg",
+    "categoria": "calzado",
+    "subcategoria": "Zapatos",
+    "color_principal": "negro",
+    "estampado": "liso",
+    "estilo": "semiformal",
+    "nivel_abrigo": 3,
+    "impermeable": false
+  }
+]

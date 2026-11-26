@@ -92,6 +92,10 @@ with TestClient(principal.aplicacion) as cliente:
     maleta = r.json()
     ok(r.status_code == 200 and maleta["con_abrigo"] and maleta["detalles"]["lugar"] == "Toluca",
        "la maleta usa el pronóstico del destino (frío: con abrigo)")
+    ok([d["fecha"] for d in maleta["pronostico"]] == ["2026-12-01", "2026-12-02", "2026-12-03"]
+       and all({"maxima_c", "minima_c", "probabilidad_lluvia", "descripcion"} <= d.keys() for d in maleta["pronostico"]),
+       "la maleta devuelve el pronóstico de cada día del destino")
+    ok(mes["pronostico"] == [], "la cápsula del mes no trae pronóstico por día")
     ok(cliente.post("/api/capsulas/generar", headers=h, json={"escenario": "viaje"}).status_code == 422, "viaje sin destino: 422")
     ok(cliente.post("/api/capsulas/generar", headers=h, json={"escenario": "anual"}).status_code == 422, "escenario desconocido: 422")
 

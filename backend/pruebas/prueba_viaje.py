@@ -102,8 +102,12 @@ with TestClient(principal.aplicacion) as cliente:
         ok(calzado == ya_van, f"con el par {ya_van} ya en la maleta, vuelve a usarlo en lugar de empacar otro")
 
     # --- Validación ---
-    ok(cliente.post("/api/viaje", headers=h, json={**pedido, "dias": 8}).status_code == 422, "más de 7 días: 422")
-    ok(cliente.post("/api/viaje", headers=h, json={**pedido, "salida": 8}).status_code == 422, "salir en más de 7 días: 422")
+    ok(cliente.post("/api/viaje", headers=h, json={**pedido, "dias": 17}).status_code == 422, "más de 16 días: 422")
+    ok(cliente.post("/api/viaje", headers=h, json={**pedido, "salida": 16}).status_code == 422, "salir fuera del pronóstico: 422")
+    ok(cliente.post("/api/viaje", headers=h, json={**pedido, "salida": 10, "dias": 7}).status_code == 422,
+       "el rango no puede pasar del pronóstico (10 + 7 > 16): 422")
+    rango = cliente.post("/api/viaje", headers=h, json={**pedido, "salida": 8, "dias": 8})
+    ok(rango.status_code == 200 and len(rango.json()["dias"]) == 8, "un rango de calendario de 8 días (del 9 al 16): 200")
     ok(cliente.post("/api/viaje", headers=h, json={**pedido, "ocasion": "playa"}).status_code == 422, "ocasión desconocida: 422")
     ok(cliente.post("/api/viaje", json=pedido).status_code == 401, "el viaje pide sesión")
 

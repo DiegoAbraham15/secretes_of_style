@@ -15,7 +15,7 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFi
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from pymongo.errors import DuplicateKeyError
 
 from servidor import (base_datos, busqueda_imagen, capsulas, colorimetria, compra, digitalizar, gpu, probador, rescate,
@@ -755,9 +755,15 @@ class SolicitudViaje(BaseModel):
     latitud: float = Field(ge=-90, le=90)
     longitud: float = Field(ge=-180, le=180)
     lugar: str = Field(default="", max_length=120)
-    salida: int = Field(default=0, ge=0, le=7)  # en cuántos días sale (0 = hoy)
-    dias: int = Field(default=3, ge=1, le=7)  # el pronóstico confiable llega a una semana
+    salida: int = Field(default=0, ge=0, le=viaje.DIAS_DE_PRONOSTICO - 1)  # en cuántos días sale (0 = hoy)
+    dias: int = Field(default=3, ge=1, le=viaje.DIAS_DE_PRONOSTICO)  # del calendario: del 18 al 25 son 8 días
     ocasion: str = "diario"
+
+    @model_validator(mode="after")
+    def dentro_del_pronostico(self):
+        if self.salida + self.dias > viaje.DIAS_DE_PRONOSTICO:
+            raise ValueError(f"Las fechas deben caer dentro de los próximos {viaje.DIAS_DE_PRONOSTICO} días")
+        return self
 
 
 @aplicacion.post("/api/viaje")
@@ -927,19 +933,29 @@ class SolicitudCapsula(BaseModel):
     latitud: float | None = Field(default=None, ge=-90, le=90)
     longitud: float | None = Field(default=None, ge=-180, le=180)
     lugar: str = Field(default="", max_length=120)
-    salida: int = Field(default=0, ge=0, le=7)
-    dias: int = Field(default=5, ge=1, le=7)
+    salida: int = Field(default=0, ge=0, le=viaje.DIAS_DE_PRONOSTICO - 1)
+    dias: int = Field(default=5, ge=1, le=viaje.DIAS_DE_PRONOSTICO)
+
+    @model_validator(mode="after")
+    def dentro_del_pronostico(self):
+        if self.salida + self.dias > viaje.DIAS_DE_PRONOSTICO:
+            raise ValueError(f"Las fechas deben caer dentro de los próximos {viaje.DIAS_DE_PRONOSTICO} días")
+        return self
 
 
-def hechos_de_capsula(datos: SolicitudCapsula) -> list[set[str]]:
-    """Los hechos de cada día: el pronóstico del destino (viaje) o el clima de hoy (mes). Sin ubicación, templado."""
+def hechos_de_capsula(datos: SolicitudCapsula) -> tuple[list[set[str]], list[dict]]:
+    """Los hechos de cada día: el pronóstico del destino (viaje) o el clima de hoy (mes). Sin ubicación, templado.
+
+    También devuelve el pronóstico de cada día del viaje (vacío en la del mes) para mostrarlo en la app.
+    """
     ocasion = hechos_de_ocasion(datos.ocasion)
     if datos.latitud is None or datos.longitud is None:
-        return [ocasion]
+        return [ocasion], []
     if datos.escenario == "viaje":
         pronostico = viaje.pronostico_diario(datos.latitud, datos.longitud)
-        return [viaje.clima_del_dia(pronostico, i)[1] | ocasion for i in range(datos.salida, datos.salida + datos.dias)]
-    return [set(obtener_clima(datos.latitud, datos.longitud)["hechos"]) | ocasion]
+        dias = [viaje.clima_del_dia(pronostico, i) for i in range(datos.salida, datos.salida + datos.dias)]
+        return [hechos | ocasion for _, hechos in dias], [clima for clima, _ in dias]
+    return [set(obtener_clima(datos.latitud, datos.longitud)["hechos"]) | ocasion], []
 
 
 @aplicacion.post("/api/capsulas/generar")
@@ -952,9 +968,9 @@ def generar_capsula(datos: SolicitudCapsula, usuario: dict = Depends(usuario_act
     if datos.escenario == "viaje" and datos.latitud is None:
         raise HTTPException(422, "Elige el destino del viaje")
     usos = {i: u["veces"] for i, u in uso_por_prenda(usuario["id"]).items()}
-    resultado = capsulas.armar(prendas_de(usuario["id"]), datos.escenario, hechos_de_capsula(datos),
-                               leer_colorimetria(usuario["id"]), usos)
-    return {**resultado, "detalles": {"ocasion": datos.ocasion, "lugar": datos.lugar or None, "dias": datos.dias,
+    hechos, pronostico = hechos_de_capsula(datos)
+    resultado = capsulas.armar(prendas_de(usuario["id"]), datos.escenario, hechos, leer_colorimetria(usuario["id"]), usos)
+    return {**resultado, "pronostico": pronostico, "detalles": {"ocasion": datos.ocasion, "lugar": datos.lugar or None, "dias": datos.dias,
                                       "salida": datos.salida, "con_abrigo": resultado["con_abrigo"]}}
 
 

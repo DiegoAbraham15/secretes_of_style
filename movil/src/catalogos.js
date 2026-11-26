@@ -8,6 +8,55 @@ export const CATEGORIAS = [
   { valor: 'accesorio', etiqueta: 'Accesorio' },
 ];
 
+// Tipos de prenda de cada categoría, con el nivel de abrigo que se propone al elegirlos (1 muy fresca a 5 muy
+// abrigada). Se muestran solo cuando ya hay una categoría; "Otro" deja escribir un tipo que no esté aquí.
+// Los mismos nombres están en backend/servidor/esquemas.py (TIPOS_POR_CATEGORIA): al agregar uno hay que tocar los dos.
+export const TIPOS_DE_PRENDA = {
+  parte_superior: [
+    { valor: 'Playera', abrigo: 2 },
+    { valor: 'Camisa', abrigo: 3 },
+    { valor: 'Blusa', abrigo: 2 },
+    { valor: 'Polo', abrigo: 2 },
+    { valor: 'Top', abrigo: 1 },
+    { valor: 'Sudadera', abrigo: 4 },
+    { valor: 'Suéter', abrigo: 4 },
+  ],
+  parte_inferior: [
+    { valor: 'Jeans', abrigo: 3 },
+    { valor: 'Pantalón', abrigo: 3 },
+    { valor: 'Shorts', abrigo: 1 },
+    { valor: 'Falda', abrigo: 2 },
+    { valor: 'Leggings', abrigo: 2 },
+    { valor: 'Pants', abrigo: 3 },
+  ],
+  calzado: [
+    { valor: 'Tenis', abrigo: 3 },
+    { valor: 'Zapatos', abrigo: 3 },
+    { valor: 'Mocasines', abrigo: 3 },
+    { valor: 'Sandalias', abrigo: 1 },
+    { valor: 'Botines', abrigo: 4 },
+    { valor: 'Botas', abrigo: 4 },
+  ],
+  abrigo: [
+    { valor: 'Chamarra', abrigo: 4 },
+    { valor: 'Saco', abrigo: 3 },
+    { valor: 'Abrigo', abrigo: 5 },
+    { valor: 'Cárdigan', abrigo: 3 },
+    { valor: 'Chaleco', abrigo: 3 },
+    { valor: 'Gabardina', abrigo: 4 },
+  ],
+  accesorio: [
+    { valor: 'Bolsa', abrigo: 1 },
+    { valor: 'Gorra', abrigo: 1 },
+    { valor: 'Bufanda', abrigo: 3 },
+    { valor: 'Cinturón', abrigo: 1 },
+    { valor: 'Lentes', abrigo: 1 },
+    { valor: 'Reloj', abrigo: 1 },
+  ],
+};
+
+export const tiposDe = (categoria) => TIPOS_DE_PRENDA[categoria] ?? [];
+
 export const COLORES = [
   { valor: 'negro', etiqueta: 'Negro', hex: '#1A1A1A' },
   { valor: 'blanco', etiqueta: 'Blanco', hex: '#FFFFFF' },

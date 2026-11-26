@@ -1,0 +1,14 @@
+# Lo que NO se sube a EAS Build: solo la app (movil/) hace falta para compilar el APK.
+backend/
+Manuales/
+**/node_modules/
+**/.expo/
+.playwright-mcp/
+*.docx
+*.pdf
+~$*
+Thumbs.db
+.DS_Store
+.env
+**/.env
+*.log

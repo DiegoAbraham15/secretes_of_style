@@ -8,6 +8,15 @@ from servidor.aprendizaje import ACCESORIOS, PESOS_DE_RESPUESTA
 from servidor.logica import COLORES, ESTAMPADOS, ESTILOS
 
 CATEGORIAS = ["parte_superior", "parte_inferior", "calzado", "abrigo", "accesorio"]
+# Tipos de prenda de cada categoría (los mismos de movil/src/catalogos.js, TIPOS_DE_PRENDA). La subcategoría sigue
+# siendo texto libre: estos son los que la app propone y los que la IA debe usar cuando la prenda encaja.
+TIPOS_POR_CATEGORIA = {
+    "parte_superior": ["Playera", "Camisa", "Blusa", "Polo", "Top", "Sudadera", "Suéter"],
+    "parte_inferior": ["Jeans", "Pantalón", "Shorts", "Falda", "Leggings", "Pants"],
+    "calzado": ["Tenis", "Zapatos", "Mocasines", "Sandalias", "Botines", "Botas"],
+    "abrigo": ["Chamarra", "Saco", "Abrigo", "Cárdigan", "Chaleco", "Gabardina"],
+    "accesorio": ["Bolsa", "Gorra", "Bufanda", "Cinturón", "Lentes", "Reloj"],
+}
 ESTADOS_PRENDA = ["disponible", "en_lavado", "archivada"]
 ESTADOS_PRUEBA = ["en_cola", "procesando", "lista", "error"]
 TEMPORADAS = ["primavera_verano", "todo_el_ano", "otono_invierno"]

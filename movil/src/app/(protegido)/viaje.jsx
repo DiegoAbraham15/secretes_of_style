@@ -1,4 +1,4 @@
-// Tu viaje: eliges a dónde vas, cuándo sales y cuántos días; el servidor busca el pronóstico de cada día, arma un
+// Tu viaje: eliges a dónde vas y las fechas en un calendario (del 18 al 25); el servidor busca el pronóstico de cada día, arma un
 // look por día con A* y tus gustos, y junta la maleta (cada prenda una vez, con los días en que se usa).
 // Las partes de arriba y de abajo cuestan más si se repiten, así la maleta varía sin cargar de más.
 import { router } from 'expo-router';
@@ -11,30 +11,12 @@ import { Boton } from '../../componentes/Boton';
 import { Campo } from '../../componentes/Campo';
 import { FilaPrenda } from '../../componentes/FilaPrenda';
 import { Perchero } from '../../componentes/Perchero';
+import { RangoFechas, fechaLarga, rangoADias, rangoInicial } from '../../componentes/RangoFechas';
 import { Selector } from '../../componentes/Selector';
 import { ICONO_CLIMA } from '../../componentes/TarjetaClima';
 import { IconoAviso, IconoBuscar, IconoUbicacion, IconoViaje } from '../../iconos';
 import { Aparecer, vibrar } from '../../movimiento';
 import { crearEstilos, espacio, presionado, radio, tactil, tamañoIcono, useTema } from '../../tema';
-
-const SALIDAS = [
-  { valor: 0, etiqueta: 'Hoy' },
-  { valor: 1, etiqueta: 'Mañana' },
-  { valor: 3, etiqueta: 'En 3 días' },
-  { valor: 7, etiqueta: 'En una semana' },
-];
-const DURACIONES = [2, 3, 4, 5, 7].map((n) => ({ valor: n, etiqueta: `${n} días` }));
-const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
-const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre',
-  'noviembre', 'diciembre'];
-
-// "2026-12-01" → "Martes 1 de diciembre" (a mano: no depende del idioma del teléfono).
-function fechaLarga(iso) {
-  const [anio, mes, dia] = iso.split('-').map(Number);
-  const fecha = new Date(anio, mes - 1, dia);
-  const semana = DIAS_SEMANA[fecha.getDay()];
-  return `${semana[0].toUpperCase()}${semana.slice(1)} ${dia} de ${MESES[mes - 1]}`;
-}
 
 const nombreDelLugar = (lugar) => [lugar.nombre, lugar.region, lugar.pais].filter(Boolean).join(', ');
 
@@ -64,8 +46,7 @@ export default function PantallaViaje() {
   const [lugares, establecerLugares] = useState(null); // resultados de la búsqueda
   const [buscando, establecerBuscando] = useState(false);
   const [lugar, establecerLugar] = useState(null);
-  const [salida, establecerSalida] = useState(1);
-  const [dias, establecerDias] = useState(3);
+  const [fechas, establecerFechas] = useState(() => rangoInicial(1, 3)); // { inicio, fin } del calendario
   const [ocasion, establecerOcasion] = useState('diario');
   const [plan, establecerPlan] = useState(null);
   const [armando, establecerArmando] = useState(false);
@@ -94,6 +75,7 @@ export default function PantallaViaje() {
     establecerArmando(true);
     establecerError(null);
     try {
+      const { salida, dias } = rangoADias(fechas); // en cuántos días sale y cuántos dura, según el calendario
       establecerPlan(await planearViaje(lugar, salida, dias, ocasion));
       vibrar.exito();
     } catch (e) {
@@ -159,9 +141,11 @@ export default function PantallaViaje() {
         )}
       </View>
 
-      {/* 2 a 4. Cuándo, cuántos días y para qué */}
-      <Selector titulo="¿Cuándo sales?" opciones={SALIDAS} seleccionado={salida} alCambiar={cambiar(establecerSalida)} enLinea estilo={{ marginBottom: 0 }} />
-      <Selector titulo="¿Cuántos días?" opciones={DURACIONES} seleccionado={dias} alCambiar={cambiar(establecerDias)} enLinea estilo={{ marginBottom: 0 }} />
+      {/* 2 y 3. Fechas (calendario) y para qué */}
+      <View style={{ gap: espacio.s }}>
+        <Text style={texto.antetitulo}>¿Qué días viajas?</Text>
+        <RangoFechas valor={fechas} alCambiar={cambiar(establecerFechas)} />
+      </View>
       <Selector titulo="¿Para qué?" opciones={OCASIONES} seleccionado={ocasion} alCambiar={cambiar(establecerOcasion)} enLinea estilo={{ marginBottom: 0 }} />
 
       {error && (
@@ -174,6 +158,18 @@ export default function PantallaViaje() {
       {/* Resultado: un look por día y la maleta */}
       {plan && (
         <View style={{ gap: espacio.l }}>
+          {/* De dónde sale el clima: el pronóstico del DESTINO que elegiste, no el de donde estás */}
+          <View style={estilos.origen} accessibilityRole="summary">
+            <IconoUbicacion color={colores.primario} size={tamañoIcono.s} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={texto.cuerpoFuerte}>Pronóstico para {nombreDelLugar(lugar)}</Text>
+              <Text style={texto.nota}>
+                {plan.dias.length === 1
+                  ? fechaLarga(plan.dias[0].clima.fecha)
+                  : `${fechaLarga(plan.dias[0].clima.fecha)} al ${fechaLarga(plan.dias[plan.dias.length - 1].clima.fecha)}`}
+              </Text>
+            </View>
+          </View>
           {plan.dias.map((dia, indice) => (
             <Aparecer key={dia.dia} indice={indice}>
               <View style={{ gap: espacio.s + 4 }}>
@@ -242,4 +238,5 @@ const useEstilos = crearEstilos(({ colores, texto, bloque, tarjeta }) => ({
     backgroundColor: colores.superficieSuave,
   },
   aviso: { flexDirection: 'row', alignItems: 'flex-start', gap: espacio.s },
+  origen: { flexDirection: 'row', alignItems: 'center', gap: espacio.s + 4, padding: espacio.m, borderRadius: radio.m, backgroundColor: colores.primarioSuave },
 }));

@@ -20,4 +20,4 @@ rutas.include_router(rutas_optimizacion)  # GET /api/votos/optimizacion (hiperpa
 rutas.include_router(rutas_segmentos)  # GET /api/prendas/segmentos (K-means)
 rutas.include_router(rutas_analisis_segmentos)  # GET /api/prendas/segmentos/analisis (validación de segmentos)
 rutas.include_router(rutas_pca)  # GET /api/prendas/pca (reducción de dimensionalidad)
-rutas.include_router(rutas_grupos)  # GET /api/prendas/grupos (lo que muestra la pestaña Estadísticas de 07-09)
+rutas.include_router(rutas_grupos)  # GET /api/prendas/grupos (grupos, mapa y atípicos de la pantalla Estadísticas)

@@ -1,4 +1,4 @@
-// Segmentación con K-means, prendas atípicas y mapa PCA en la pestaña Estadísticas.
+// Segmentación con K-means, prendas atípicas y mapa PCA en la pantalla Estadísticas.
 // Cada grupo tiene un número y un color fijos (colores.grupos del tema, máximo 4). El número va siempre
 // dentro de la marca, así el grupo no depende solo del color. Tocar una prenda abre su detalle.
 import { router } from 'expo-router';

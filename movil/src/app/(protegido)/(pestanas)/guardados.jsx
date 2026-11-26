@@ -285,7 +285,7 @@ export default function PantallaGuardados() {
                 </View>
                 <Text style={[texto.subtitulo, { textAlign: 'center' }]}>Aún no guardas atuendos</Text>
                 <Text style={[texto.detalle, { textAlign: 'center' }]}>
-                  En la pestaña Atuendos toca “Guardar atuendo” en el que te guste.
+                  En Inicio toca «Armar mi look» y guarda el que te guste.
                 </Text>
               </View>
             )

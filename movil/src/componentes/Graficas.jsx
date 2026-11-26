@@ -1,4 +1,4 @@
-// Gráficas de la pestaña Estadísticas, dibujadas con componentes de React Native.
+// Gráficas de la pantalla Estadísticas, dibujadas con componentes de React Native.
 // Cada dato usa la forma que le toca: el total es un número grande, los indicadores son una lista,
 // lo que no tiene orden (categorías, colores) son barras y lo que sí lo tiene (abrigo) son columnas.
 // Las barras son de un solo color y la mayor va resaltada: la longitud ya dice el valor, el color solo destaca.
